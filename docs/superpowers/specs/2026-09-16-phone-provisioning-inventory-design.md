@@ -24,16 +24,18 @@ how phase 2 (actual cutover) works.
 
 ## Architecture
 
-Single FastAPI (Python) service, containerized, deployed behind a public HTTPS endpoint
-(vendor redirect services generally require TLS). SQLite for storage initially — same
-ORM (SQLAlchemy) allows a later swap to Postgres without app changes.
+Cloudflare Worker (TypeScript), backed by D1 (Cloudflare's SQLite-compatible managed DB).
+Domain is already on Cloudflare, and this is a one-time ~300-phone migration — plain
+Workers (no Containers tier) fits entirely inside the free plan (100k requests/day),
+avoiding the $5/mo Workers Paid + container billing that a containerized FastAPI service
+would require. TLS/HTTPS is handled automatically by Cloudflare for any route on the zone.
 
 ### Components
 
-1. **Provisioning capture endpoint** — `GET/POST /{path:path}` (catch-all). Yealink and
-   Poly phones request oddly-shaped filenames during their boot/provisioning sequence
-   (`{MAC}.cfg`, model-specific cfg, common cfg, etc.) — a catch-all avoids having to
-   pre-enumerate every filename pattern either vendor might request.
+1. **Provisioning capture endpoint** — Worker `fetch` handler matches every path (catch-all).
+   Yealink and Poly phones request oddly-shaped filenames during their boot/provisioning
+   sequence (`{MAC}.cfg`, model-specific cfg, common cfg, etc.) — a catch-all avoids having
+   to pre-enumerate every filename pattern either vendor might request.
 
    Per request, extract and persist:
    - `source_ip` (respect `X-Forwarded-For` if behind a load balancer/proxy)
@@ -51,17 +53,18 @@ ORM (SQLAlchemy) allows a later swap to Postgres without app changes.
    normal polling interval, which is safe for a lab test group. Vendor-specific tolerance
    for `200` vs `404` vs other codes is unconfirmed — first lab run settles it.
 
-2. **Admin dashboard** — single server-rendered page (Jinja2) listing captured devices:
-   most recent check-in per MAC, check-in count, manufacturer/model/firmware/IP, with
-   basic filtering. Protected by HTTP Basic Auth (credentials from env var) — this route
-   is the only one that needs protecting, since the provisioning endpoint has to stay
-   open for unauthenticated phone check-ins.
+2. **Admin dashboard** — single Worker-rendered HTML page listing captured devices: most
+   recent check-in per MAC, check-in count, manufacturer/model/firmware/IP, with basic
+   filtering. Protected by HTTP Basic Auth (credentials from a Worker secret via
+   `wrangler secret put`) — this route is the only one that needs protecting, since the
+   provisioning endpoint has to stay open for unauthenticated phone check-ins.
 
 3. **Zoom S2S credential intake** — a settings form on the (protected) admin dashboard to
    accept and store a Zoom Server-to-Server OAuth app's Client ID, Client Secret, and
-   Account ID. Secret is encrypted at rest (Fernet symmetric encryption, key supplied via
-   env var, never committed). No token exchange or Zoom API calls happen in Phase 1 — this
-   only makes the credentials available and ready for Phase 2.
+   Account ID. Secret is encrypted at rest using the Worker runtime's Web Crypto API
+   (AES-GCM), with the encryption key held as a Worker secret, never committed. No token
+   exchange or Zoom API calls happen in Phase 1 — this only makes the credentials
+   available and ready for Phase 2.
 
 ### Data model
 
@@ -105,9 +108,10 @@ taking the most recent row per group plus a count.
 
 ## Deployment
 
-Docker container. Needs a public HTTPS URL for RPS/ZTP to redirect test MACs to. No
-specific host locked in — a platform with managed TLS (e.g. Fly.io, Render) avoids
-needing to run a separate reverse proxy/cert manager for a Phase 1 lab test.
+Deployed as a Cloudflare Worker via `wrangler deploy`, bound to a subdomain on the
+existing Cloudflare-managed zone (e.g. `provision.<domain>`) with a D1 database binding.
+No Containers tier, no separate TLS/cert management, no idle cost — fits the free Workers
+plan for this request volume.
 
 ## Testing plan
 
@@ -120,6 +124,13 @@ needing to run a separate reverse proxy/cert manager for a Phase 1 lab test.
    data; confirm parsed fields populate correctly on a second check-in.
 5. Verify dashboard renders the device list and Zoom S2S settings form saves/encrypts
    correctly (round-trip: save, restart app, confirm secret decrypts back to original).
+
+## Cost
+
+Free Cloudflare Workers plan: 100k requests/day, D1 included on same plan. ~300 phones
+doing a handful of boot-sequence check-ins each during a one-time lab test is nowhere
+near that limit — expected cost: $0. Revisit only if this grows past a one-time migration
+into an ongoing service.
 
 ## Phase 2 (not in scope now)
 
