@@ -175,5 +175,6 @@ describe('/admin/settings', () => {
   it('returns 404 for unknown admin paths', async () => {
     const response = await SELF.fetch('https://example.com/admin/nope', { headers: AUTH });
     expect(response.status).toBe(404);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 });

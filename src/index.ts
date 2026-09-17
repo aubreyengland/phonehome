@@ -121,7 +121,9 @@ export default {
         return unauthorizedResponse();
       }
       const handler = ADMIN_ROUTES[`${request.method} ${url.pathname}`];
-      return handler ? handler(request, env, url) : new Response('Not Found', { status: 404 });
+      return handler
+        ? handler(request, env, url)
+        : new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
     }
 
     return captureProvisioningRequest(request, env, url);
