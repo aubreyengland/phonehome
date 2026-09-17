@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2026-08-22"
 
 routes = [
-  { pattern = "provision.cincylab.net", custom_domain = true }
+  { pattern = "phonehome.cincylab.net", custom_domain = true }
 ]
 
 [[d1_databases]]
