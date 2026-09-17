@@ -5,7 +5,7 @@ compatibility_date = "2026-08-22"
 [[d1_databases]]
 binding = "DB"
 database_name = "phone_provisioning"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "b471dbf3-1d7a-495d-94b1-597423d70153"
 
 [vars]
 ADMIN_USER = "admin"
