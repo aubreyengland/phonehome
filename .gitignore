@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.DS_Store
+.dev.vars
+# RingCentral export + generated seed contain employee names
+Migrate.xlsx
+*.xlsx
+seed/
