@@ -16,6 +16,7 @@ export function renderZoomPage(view: ZoomPageView): string {
   const body = `  <h1>Zoom</h1>
   <h2>Device mirror</h2>
   <p>${view.deviceCount} devices mirrored. Last sync: ${view.lastSyncAt ? escapeHtml(view.lastSyncAt) : 'never'}${view.lastSyncResult ? ` — ${escapeHtml(view.lastSyncResult)}` : ''}.</p>
+  <form method="POST" action="/admin/zoom/sync"><button type="submit">Sync now</button></form>
   <h2>Server-to-Server OAuth credentials</h2>
   ${status}
   <form method="POST" action="/admin/zoom">

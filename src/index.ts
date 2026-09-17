@@ -6,7 +6,7 @@ import { parseFleetFilter, renderDashboard } from './pages/dashboard.ts';
 import { renderZoomPage } from './pages/zoom.ts';
 import { renderSettingsPage } from './pages/settings.ts';
 import { renderProfilesPage } from './pages/profiles.ts';
-import { countZoomDevices } from './zoom.ts';
+import { countZoomDevices, syncZoomDevices } from './zoom.ts';
 import { encryptSecret } from './crypto.ts';
 import { isValidZoomUrl, listProfiles, parseVendor, refreshProfiles, saveProfile } from './profiles.ts';
 
@@ -96,6 +96,11 @@ const saveZoomCredentials: Handler = async (request, env, url) => {
   return redirect(url, '/admin/zoom');
 };
 
+const syncZoom: Handler = async (_request, env, url) => {
+  await syncZoomDevices(env);
+  return redirect(url, '/admin/zoom');
+};
+
 const settingsPage: Handler = async (_request, env) => htmlResponse(renderSettingsPage(await isServingEnabled(env.DB)));
 
 const saveSettings: Handler = async (request, env, url) => {
@@ -138,6 +143,7 @@ const ADMIN_ROUTES: Record<string, Handler> = {
   'GET /admin': dashboard,
   'GET /admin/zoom': zoomPage,
   'POST /admin/zoom': saveZoomCredentials,
+  'POST /admin/zoom/sync': syncZoom,
   'GET /admin/settings': settingsPage,
   'POST /admin/settings': saveSettings,
   'GET /admin/profiles': profilesPage,
@@ -164,5 +170,9 @@ export default {
     }
 
     return captureProvisioningRequest(request, env, url);
+  },
+
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(syncZoomDevices(env));
   },
 };

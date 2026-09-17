@@ -226,3 +226,14 @@ describe('/admin/profiles', () => {
     expect((await listProfiles(env.DB))[0]?.zoomUrl).toBeNull();
   });
 });
+
+describe('/admin/zoom/sync', () => {
+  it('runs a sync and redirects back with the result recorded', async () => {
+    const response = await SELF.fetch('https://example.com/admin/zoom/sync', { method: 'POST', headers: AUTH, redirect: 'manual' });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe('https://example.com/admin/zoom');
+    const html = await (await SELF.fetch('https://example.com/admin/zoom', { headers: AUTH })).text();
+    expect(html).toContain('not configured');
+    expect(html).toContain('action="/admin/zoom/sync"');
+  });
+});
