@@ -2,9 +2,9 @@ import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
 describe('provisioning capture endpoint', () => {
-  it('responds 200 with an empty body for any path', async () => {
+  it('responds 404 with an empty body for an unknown MAC file', async () => {
     const response = await SELF.fetch('https://example.com/aabbccddeeff.cfg');
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     expect(await response.text()).toBe('');
     expect(response.headers.get('Content-Type')).toBe('text/plain');
   });
@@ -53,9 +53,10 @@ describe('provisioning capture logging', () => {
 });
 
 import { decryptSecret } from '../src/crypto.ts';
-import { getZoomConfig, isServingEnabled } from '../src/db.ts';
+import { getZoomConfig, isServingEnabled, SETTING, setSetting } from '../src/db.ts';
 import { buildSeedSql } from '../src/fleet.ts';
-import { listProfiles } from '../src/profiles.ts';
+import { listProfiles, refreshProfiles, saveProfile } from '../src/profiles.ts';
+import { replaceZoomDevices } from '../src/zoom.ts';
 
 const AUTH = { Authorization: `Basic ${btoa('admin:secret')}` };
 
@@ -235,5 +236,48 @@ describe('/admin/zoom/sync', () => {
     const html = await (await SELF.fetch('https://example.com/admin/zoom', { headers: AUTH })).text();
     expect(html).toContain('not configured');
     expect(html).toContain('action="/admin/zoom/sync"');
+  });
+});
+
+describe('provisioning endpoint (phase 2)', () => {
+  async function makeReady() {
+    await env.DB.exec(buildSeedSql([{ macAddress: '80:5E:C0:AA:BB:CC', rcDeviceId: '1', name: 'A', extension: null, model: 'Yealink T48S', rcStatus: null }], 't'));
+    await refreshProfiles(env.DB, 't');
+    await saveProfile(env.DB, { model: 'Yealink T48S', vendor: 'yealink', zoomUrl: 'https://provpp.zoom.us/y/', enabled: true }, 't');
+    await replaceZoomDevices(env.DB, [{ macAddress: '80:5E:C0:AA:BB:CC', zoomDeviceId: 'z', displayName: null, deviceType: null, assignee: null, status: null, rawJson: '{}', syncedAt: 't' }]);
+    await setSetting(env.DB, SETTING.servingEnabled, '1');
+  }
+  const lastLog = () =>
+    env.DB.prepare('SELECT path, response_status, response_kind, response_reason FROM provisioning_requests ORDER BY id DESC LIMIT 1').first();
+
+  it('serves the redirect and logs it', async () => {
+    await makeReady();
+    const response = await SELF.fetch('https://example.com/805ec0aabbcc.cfg', { headers: { 'User-Agent': 'Yealink SIP-T48S 66.86.0.15' } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/plain');
+    expect(await response.text()).toContain('https://provpp.zoom.us/y/');
+    expect(await lastLog()).toEqual({ path: '/805ec0aabbcc.cfg', response_status: 200, response_kind: 'redirect', response_reason: null });
+  });
+
+  it('404s with the reason when the kill switch is off', async () => {
+    await makeReady();
+    await setSetting(env.DB, SETTING.servingEnabled, '0');
+    const response = await SELF.fetch('https://example.com/805ec0aabbcc.cfg');
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('');
+    expect(await lastLog()).toMatchObject({ response_kind: 'not_found', response_reason: 'serving-off' });
+  });
+
+  it('404s common files and still logs them', async () => {
+    const response = await SELF.fetch('https://example.com/y000000000065.cfg', { headers: { 'User-Agent': 'Yealink SIP-T48S 66.86.0.15 80:5e:c0:aa:bb:cc' } });
+    expect(response.status).toBe(404);
+    const row = await env.DB.prepare('SELECT mac_address, response_reason FROM provisioning_requests').first();
+    expect(row).toEqual({ mac_address: '80:5E:C0:AA:BB:CC', response_reason: 'unknown-file' });
+  });
+
+  it('accepts Poly uploads with 200', async () => {
+    const response = await SELF.fetch('https://example.com/64167f4b6be7-phone.cfg', { method: 'PUT', body: '<x/>' });
+    expect(response.status).toBe(200);
+    expect(await lastLog()).toMatchObject({ response_kind: 'accepted', response_reason: 'upload' });
   });
 });

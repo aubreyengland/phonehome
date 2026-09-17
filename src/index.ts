@@ -9,6 +9,7 @@ import { renderProfilesPage } from './pages/profiles.ts';
 import { countZoomDevices, syncZoomDevices } from './zoom.ts';
 import { encryptSecret } from './crypto.ts';
 import { isValidZoomUrl, listProfiles, parseVendor, refreshProfiles, saveProfile } from './profiles.ts';
+import { classifyRequest, decideResponse, loadServeContext } from './serve.ts';
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
 
@@ -35,9 +36,12 @@ function sourceIpOf(request: Request): string | null {
   return forwarded ? (forwarded.split(',')[0]?.trim() ?? null) : null;
 }
 
-async function captureProvisioningRequest(request: Request, env: Env, url: URL): Promise<Response> {
+async function handleProvisioning(request: Request, env: Env, url: URL): Promise<Response> {
   const userAgent = request.headers.get('User-Agent');
   const parsed = parseDevice(url.pathname, url.search, userAgent);
+  const file = classifyRequest(url.pathname);
+  const context = file.mac ? await loadServeContext(env.DB, file.mac) : null;
+  const decision = decideResponse(request.method, file, context);
 
   try {
     await insertRequestLog(env.DB, {
@@ -52,16 +56,19 @@ async function captureProvisioningRequest(request: Request, env: Env, url: URL):
       queryString: url.search,
       userAgent,
       headersJson: JSON.stringify(Object.fromEntries(request.headers)),
-      responseStatus: 200,
-      responseKind: 'accepted',
-      responseReason: 'phase1-inert',
+      responseStatus: decision.status,
+      responseKind: decision.kind,
+      responseReason: decision.reason,
     });
   } catch (error) {
     // Never let a logging failure change what the phone sees.
     console.error('failed to log provisioning request', error);
   }
 
-  return new Response('', { status: 200, headers: { 'Content-Type': 'text/plain' } });
+  return new Response(decision.body, {
+    status: decision.status,
+    headers: { 'Content-Type': decision.contentType, 'Cache-Control': 'no-store' },
+  });
 }
 
 const dashboard: Handler = async (_request, env, url) => {
@@ -169,7 +176,7 @@ export default {
         : new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
     }
 
-    return captureProvisioningRequest(request, env, url);
+    return handleProvisioning(request, env, url);
   },
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
