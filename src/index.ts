@@ -82,8 +82,13 @@ async function handleProvisioning(request: Request, env: Env, url: URL): Promise
 }
 
 const dashboard: Handler = async (_request, env, url) => {
-  const fleet = await listFleet(env.DB);
-  return htmlResponse(renderDashboard(fleet, parseFleetFilter(url.searchParams.get('status'))));
+  const [fleet, servingEnabled, lastZoomSyncAt, zoomDeviceCount] = await Promise.all([
+    listFleet(env.DB),
+    isServingEnabled(env.DB),
+    getSetting(env.DB, SETTING.lastZoomSyncAt),
+    countZoomDevices(env.DB),
+  ]);
+  return htmlResponse(renderDashboard(fleet, parseFleetFilter(url.searchParams.get('status')), { servingEnabled, lastZoomSyncAt, zoomDeviceCount }));
 };
 
 const zoomPage: Handler = async (_request, env) => {

@@ -76,6 +76,7 @@ describe('saveZoomConfig / getZoomConfig', () => {
 
 import { listFleet, type FleetRow } from '../src/db.ts';
 import { buildSeedSql } from '../src/fleet.ts';
+import { replaceZoomDevices } from '../src/zoom.ts';
 
 function checkIn(macAddress: string, receivedAt: string, firmware: string, sourceIp = '203.0.113.5') {
   return insertRequestLog(env.DB, {
@@ -111,6 +112,17 @@ describe('listFleet', () => {
     await checkIn('80:5E:C0:00:00:01', '2026-09-17T02:00:00.000Z', '66.86.0.15', '203.0.113.9');
     await checkIn('AA:AA:AA:00:00:03', '2026-09-17T01:30:00.000Z', '1.0.0.0');
 
+    await replaceZoomDevices(env.DB, [
+      { macAddress: '80:5E:C0:00:00:01', zoomDeviceId: 'z1', displayName: null, deviceType: null, assignee: null, status: null, rawJson: '{}', syncedAt: 't' },
+    ]);
+    await insertRequestLog(env.DB, {
+      receivedAt: '2026-09-17T03:00:00.000Z',
+      sourceIp: null, manufacturer: null, model: null, firmware: null,
+      macAddress: '80:5E:C0:00:00:01',
+      httpMethod: 'GET', path: '/805ec0000001.cfg', queryString: '', userAgent: null, headersJson: '{}',
+      responseStatus: 200, responseKind: 'redirect', responseReason: null,
+    });
+
     const fleet = await listFleet(env.DB);
     const byMac = Object.fromEntries(fleet.map((r) => [r.macAddress, r]));
 
@@ -123,12 +135,14 @@ describe('listFleet', () => {
       expectedExtension: '2001',
       expectedModel: 'Yealink T48S',
       rcStatus: 'Online',
-      manufacturer: 'Yealink',
-      model: 'SIP-T48S',
-      firmware: '66.86.0.15',
-      sourceIp: '203.0.113.9',
-      lastSeenAt: '2026-09-17T02:00:00.000Z',
-      checkInCount: 2,
+      manufacturer: null,
+      model: null,
+      firmware: null,
+      sourceIp: null,
+      lastSeenAt: '2026-09-17T03:00:00.000Z',
+      checkInCount: 3,
+      inZoom: true,
+      lastRedirectAt: '2026-09-17T03:00:00.000Z',
     });
 
     expect(byMac['80:5E:C0:00:00:02']).toMatchObject({
@@ -138,6 +152,8 @@ describe('listFleet', () => {
       firmware: null,
       lastSeenAt: null,
       checkInCount: 0,
+      inZoom: false,
+      lastRedirectAt: null,
     });
 
     expect(byMac['AA:AA:AA:00:00:03']).toMatchObject({
@@ -145,6 +161,8 @@ describe('listFleet', () => {
       expectedName: null,
       firmware: '1.0.0.0',
       checkInCount: 1,
+      inZoom: false,
+      lastRedirectAt: null,
     });
   });
 

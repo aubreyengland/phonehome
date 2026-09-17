@@ -94,6 +94,8 @@ export interface FleetRow {
   sourceIp: string | null;
   lastSeenAt: string | null;
   checkInCount: number;
+  inZoom: boolean;
+  lastRedirectAt: string | null;
 }
 
 export async function listFleet(db: D1Database): Promise<FleetRow[]> {
@@ -109,33 +111,38 @@ export async function listFleet(db: D1Database): Promise<FleetRow[]> {
            WHERE mac_address IS NOT NULL
          )
          WHERE rn = 1
+       ),
+       redirected AS (
+         SELECT mac_address, MAX(received_at) AS last_redirect_at
+         FROM provisioning_requests
+         WHERE response_kind = 'redirect'
+         GROUP BY mac_address
        )
        SELECT * FROM (
-       SELECT e.mac_address AS macAddress,
-              CASE WHEN l.mac_address IS NULL THEN 'not-seen' ELSE 'seen' END AS status,
-              e.name AS expectedName,
-              e.extension AS expectedExtension,
-              e.model AS expectedModel,
-              e.rc_status AS rcStatus,
-              l.manufacturer AS manufacturer,
-              l.model AS model,
-              l.firmware AS firmware,
-              l.source_ip AS sourceIp,
-              l.received_at AS lastSeenAt,
-              COALESCE(l.check_in_count, 0) AS checkInCount
-       FROM expected_devices e
-       LEFT JOIN latest l ON l.mac_address = e.mac_address
-       UNION ALL
-       SELECT l.mac_address, 'unexpected', NULL, NULL, NULL, NULL,
-              l.manufacturer, l.model, l.firmware, l.source_ip, l.received_at, l.check_in_count
-       FROM latest l
-       LEFT JOIN expected_devices e ON e.mac_address = l.mac_address
-       WHERE e.mac_address IS NULL
+         SELECT e.mac_address AS macAddress,
+                CASE WHEN l.mac_address IS NULL THEN 'not-seen' ELSE 'seen' END AS status,
+                e.name AS expectedName, e.extension AS expectedExtension, e.model AS expectedModel, e.rc_status AS rcStatus,
+                l.manufacturer AS manufacturer, l.model AS model, l.firmware AS firmware, l.source_ip AS sourceIp,
+                l.received_at AS lastSeenAt, COALESCE(l.check_in_count, 0) AS checkInCount,
+                z.mac_address IS NOT NULL AS inZoom, r.last_redirect_at AS lastRedirectAt
+         FROM expected_devices e
+         LEFT JOIN latest l ON l.mac_address = e.mac_address
+         LEFT JOIN zoom_devices z ON z.mac_address = e.mac_address
+         LEFT JOIN redirected r ON r.mac_address = e.mac_address
+         UNION ALL
+         SELECT l.mac_address, 'unexpected', NULL, NULL, NULL, NULL,
+                l.manufacturer, l.model, l.firmware, l.source_ip, l.received_at, l.check_in_count,
+                z.mac_address IS NOT NULL, r.last_redirect_at
+         FROM latest l
+         LEFT JOIN expected_devices e ON e.mac_address = l.mac_address
+         LEFT JOIN zoom_devices z ON z.mac_address = l.mac_address
+         LEFT JOIN redirected r ON r.mac_address = l.mac_address
+         WHERE e.mac_address IS NULL
        )
        ORDER BY lastSeenAt DESC NULLS LAST, expectedName`,
     )
-    .all<FleetRow>();
-  return result.results;
+    .all<Omit<FleetRow, 'inZoom'> & { inZoom: number }>();
+  return result.results.map((r) => ({ ...r, inZoom: r.inZoom === 1 }));
 }
 
 export const SETTING = {
