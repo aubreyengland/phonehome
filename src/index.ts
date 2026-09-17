@@ -1,5 +1,6 @@
 import type { Env } from './types.ts';
 import { parseDevice } from './parse.ts';
+import { listRecentRequests, renderConsolePage } from './console.ts';
 import { SETTING, getSetting, getZoomConfig, insertRequestLog, isServingEnabled, listFleet, saveZoomConfig, setSetting } from './db.ts';
 import { checkBasicAuth, unauthorizedResponse } from './auth.ts';
 import { parseFleetFilter, renderDashboard } from './pages/dashboard.ts';
@@ -125,6 +126,16 @@ const saveSettings: Handler = async (request, env, url) => {
   return redirect(url, '/admin/settings');
 };
 
+const consolePage: Handler = async (_request, env) => htmlResponse(renderConsolePage(await listRecentRequests(env.DB, {})));
+
+const requestsFeed: Handler = async (_request, env, url) => {
+  const after = Number(url.searchParams.get('after') ?? 0);
+  const rows = await listRecentRequests(env.DB, { after: Number.isFinite(after) ? after : 0 });
+  return new Response(JSON.stringify({ rows }), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+};
+
 const profilesPage: Handler = async (_request, env) => htmlResponse(renderProfilesPage(await listProfiles(env.DB)));
 
 const refreshProfilesRoute: Handler = async (_request, env, url) => {
@@ -157,6 +168,8 @@ const saveProfiles: Handler = async (request, env, url) => {
 /** `"METHOD /path"` -> handler. Every entry is behind Basic Auth. Later tasks add rows here. */
 const ADMIN_ROUTES: Record<string, Handler> = {
   'GET /admin': dashboard,
+  'GET /admin/console': consolePage,
+  'GET /admin/api/requests': requestsFeed,
   'GET /admin/zoom': zoomPage,
   'POST /admin/zoom': saveZoomCredentials,
   'POST /admin/zoom/sync': syncZoom,

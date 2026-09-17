@@ -239,6 +239,29 @@ describe('/admin/zoom/sync', () => {
   });
 });
 
+describe('/admin/console', () => {
+  it('renders the page and serves the JSON feed with an after cursor', async () => {
+    await SELF.fetch('https://example.com/first.cfg');
+    await SELF.fetch('https://example.com/second.cfg');
+
+    const page = await SELF.fetch('https://example.com/admin/console', { headers: AUTH });
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('/second.cfg');
+
+    const feed = await SELF.fetch('https://example.com/admin/api/requests', { headers: AUTH });
+    expect(feed.headers.get('Content-Type')).toContain('application/json');
+    const { rows } = (await feed.json()) as { rows: { id: number; path: string }[] };
+    expect(rows.map((r) => r.path)).toEqual(['/second.cfg', '/first.cfg']);
+
+    const newer = await SELF.fetch(`https://example.com/admin/api/requests?after=${rows[1]!.id}`, { headers: AUTH });
+    expect(((await newer.json()) as { rows: unknown[] }).rows).toHaveLength(1);
+  });
+
+  it('requires auth on the feed', async () => {
+    expect((await SELF.fetch('https://example.com/admin/api/requests')).status).toBe(401);
+  });
+});
+
 describe('provisioning endpoint (phase 2)', () => {
   async function makeReady() {
     await env.DB.exec(buildSeedSql([{ macAddress: '80:5E:C0:AA:BB:CC', rcDeviceId: '1', name: 'A', extension: null, model: 'Yealink T48S', rcStatus: null }], 't'));
