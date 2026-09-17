@@ -6,3 +6,4 @@ node_modules/
 Migrate.xlsx
 *.xlsx
 seed/
+.superpowers/
