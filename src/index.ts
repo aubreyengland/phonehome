@@ -20,7 +20,10 @@ export function htmlResponse(body: string, status = 200): Response {
 }
 
 function redirect(url: URL, path: string): Response {
-  return Response.redirect(`${url.origin}${path}`, 303);
+  return new Response(null, {
+    status: 303,
+    headers: { Location: `${url.origin}${path}`, 'Cache-Control': 'no-store' },
+  });
 }
 
 function sourceIpOf(request: Request): string | null {
@@ -119,7 +122,10 @@ const saveProfiles: Handler = async (request, env, url) => {
   }));
   const bad = inputs.find((i) => i.zoomUrl !== null && !isValidZoomUrl(i.zoomUrl));
   if (bad) {
-    return new Response(`Zoom URL for "${bad.model}" must start with https://`, { status: 400 });
+    return new Response(`Zoom URL for "${bad.model}" must start with https://`, {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
   for (const input of inputs) {
     await saveProfile(env.DB, input, now);

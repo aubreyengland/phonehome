@@ -129,6 +129,7 @@ describe('/admin/zoom', () => {
     });
     expect(response.status).toBe(303);
     expect(response.headers.get('Location')).toBe('https://example.com/admin/zoom');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
 
     const config = await getZoomConfig(env.DB);
     expect(config?.clientId).toBe('client-123');
@@ -221,6 +222,7 @@ describe('/admin/profiles', () => {
     await post('/admin/profiles/refresh', '');
     const response = await post('/admin/profiles', new URLSearchParams({ 'vendor:Yealink T48S': 'yealink', 'zoom_url:Yealink T48S': 'http://x' }).toString());
     expect(response.status).toBe(400);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect((await listProfiles(env.DB))[0]?.zoomUrl).toBeNull();
   });
 });
