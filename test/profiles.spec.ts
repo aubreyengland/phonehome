@@ -36,6 +36,11 @@ describe('isValidZoomUrl', () => {
     expect(isValidZoomUrl('provpp.zoom.us/x')).toBe(false);
     expect(isValidZoomUrl('')).toBe(false);
   });
+
+  it('rejects control and whitespace characters that new URL() would silently strip', () => {
+    expect(isValidZoomUrl('https://provpp.zoom.us/x\r\nevil')).toBe(false);
+    expect(isValidZoomUrl('https://provpp.zoom.us/x y')).toBe(false);
+  });
 });
 
 describe('refreshProfiles / listProfiles / saveProfile', () => {

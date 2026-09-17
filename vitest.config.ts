@@ -12,7 +12,7 @@ export default defineConfig({
         bindings: {
           TEST_MIGRATIONS: migrations,
           // Test-only credentials; real deploys use `wrangler secret put` (see plan Task 15).
-          ADMIN_PASSWORD: 'secret',
+          ADMIN_PASSWORD: 'secret-test-pass',
           ENCRYPTION_KEY: 'l7GJ2Q6f1n9mYkX3wZ4pC8dT5rV0sB1eH2iJ6kL9mN0=',
         },
       },

@@ -116,8 +116,11 @@ export function toZoomDeviceRows(raw: unknown[], syncedAt: string): ZoomDeviceRo
 }
 
 export async function replaceZoomDevices(db: D1Database, rows: ZoomDeviceRow[]): Promise<void> {
+  // Zoom's device list can legitimately contain the same MAC twice (e.g. a shared/duplicate
+  // entry across the assigned and unassigned pages); OR REPLACE keeps the sync from throwing
+  // and just lets the later row in the batch win, rather than corrupting the whole sync.
   const insert = db.prepare(
-    `INSERT INTO zoom_devices (mac_address, zoom_device_id, display_name, device_type, assignee, status, raw_json, synced_at)
+    `INSERT OR REPLACE INTO zoom_devices (mac_address, zoom_device_id, display_name, device_type, assignee, status, raw_json, synced_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   await db.batch([
@@ -145,7 +148,13 @@ export async function syncZoomDevices(env: Env, fetchImpl: FetchImpl = fetch): P
   } catch (error) {
     result = { ok: false, message: `error: ${error instanceof Error ? error.message : String(error)}` };
   }
-  await setSetting(env.DB, SETTING.lastZoomSyncAt, now);
-  await setSetting(env.DB, SETTING.lastZoomSyncResult, result.message);
+  try {
+    await setSetting(env.DB, SETTING.lastZoomSyncAt, now);
+    await setSetting(env.DB, SETTING.lastZoomSyncResult, result.message);
+  } catch (error) {
+    // Recording the sync outcome is best-effort: this function must never throw, even if D1
+    // is unavailable for the setting write itself.
+    console.error('failed to record zoom sync result', error);
+  }
   return result;
 }

@@ -98,16 +98,22 @@ export function decideResponse(method: string, file: RequestFile, context: Serve
 
   let body: string;
   let contentType: string;
-  if (context.profile.vendor === 'yealink' && file.type === 'mac_cfg') {
-    body = renderYealinkRedirect(context.profile.zoomUrl);
-    contentType = 'text/plain';
-  } else if (context.profile.vendor === 'poly') {
-    body = file.type === 'mac_cfg' ? renderPolyMaster(file.macLower) : renderPolyDeviceConfig(context.profile.zoomUrl);
-    contentType = 'application/xml';
-  } else if (context.profile.vendor === 'other') {
-    return notFound('vendor-other');
-  } else {
-    return notFound('unknown-file');
+  try {
+    if (context.profile.vendor === 'yealink' && file.type === 'mac_cfg') {
+      body = renderYealinkRedirect(context.profile.zoomUrl);
+      contentType = 'text/plain';
+    } else if (context.profile.vendor === 'poly') {
+      body = file.type === 'mac_cfg' ? renderPolyMaster(file.macLower) : renderPolyDeviceConfig(context.profile.zoomUrl);
+      contentType = 'application/xml';
+    } else if (context.profile.vendor === 'other') {
+      return notFound('vendor-other');
+    } else {
+      return notFound('unknown-file');
+    }
+  } catch {
+    // A stored zoomUrl that somehow slipped past isValidZoomUrl (or was edited directly in D1)
+    // must never crash the serve path or leak into a generated config file. Degrade to a 404.
+    return notFound('bad-zoom-url');
   }
   return { status: 200, kind: 'redirect', reason: null, body: method === 'HEAD' ? '' : body, contentType };
 }

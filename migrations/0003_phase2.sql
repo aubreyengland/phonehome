@@ -25,3 +25,5 @@ CREATE TABLE settings (
 ALTER TABLE provisioning_requests ADD COLUMN response_status INTEGER;
 ALTER TABLE provisioning_requests ADD COLUMN response_kind TEXT;
 ALTER TABLE provisioning_requests ADD COLUMN response_reason TEXT;
+
+CREATE INDEX idx_provisioning_requests_redirect ON provisioning_requests(mac_address, received_at) WHERE response_kind = 'redirect';

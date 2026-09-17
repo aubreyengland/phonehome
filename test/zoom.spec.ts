@@ -96,6 +96,14 @@ describe('replaceZoomDevices / syncZoomDevices', () => {
     expect(only?.mac_address).toBe('80:5E:C0:00:00:03');
   });
 
+  it('survives Zoom returning the same MAC twice in one page (duplicate assigned + unassigned entries)', async () => {
+    const row = { macAddress: '80:5E:C0:00:00:07', zoomDeviceId: 'first', displayName: null, deviceType: null, assignee: null, status: null, rawJson: '{}', syncedAt: 't' };
+    await replaceZoomDevices(env.DB, [row, { ...row, zoomDeviceId: 'second' }]);
+    expect(await countZoomDevices(env.DB)).toBe(1);
+    const only = await env.DB.prepare('SELECT zoom_device_id FROM zoom_devices').first<{ zoom_device_id: string }>();
+    expect(only?.zoom_device_id).toBe('second');
+  });
+
   it('syncs end to end and records the result', async () => {
     await saveZoomConfig(env.DB, { clientId: 'cid', clientSecretEncrypted: await encryptSecret('shh', env.ENCRYPTION_KEY), accountId: 'acc', updatedAt: 't' });
     const { impl } = zoomStub({
@@ -115,6 +123,17 @@ describe('replaceZoomDevices / syncZoomDevices', () => {
     expect(result.ok).toBe(false);
     expect(result.message).toMatch(/not configured/);
     expect(await countZoomDevices(env.DB)).toBe(1);
+  });
+
+  it('never throws even if recording the sync result itself fails', async () => {
+    await env.DB.exec('DROP TABLE settings');
+    try {
+      const result = await syncZoomDevices(env, vi.fn() as unknown as FetchImpl);
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/not configured/);
+    } finally {
+      await env.DB.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    }
   });
 
   it('keeps the previous mirror when Zoom errors mid-way', async () => {

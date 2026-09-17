@@ -57,8 +57,9 @@ import { getZoomConfig, isServingEnabled, SETTING, setSetting } from '../src/db.
 import { buildSeedSql } from '../src/fleet.ts';
 import { listProfiles, refreshProfiles, saveProfile } from '../src/profiles.ts';
 import { replaceZoomDevices } from '../src/zoom.ts';
+import worker from '../src/index.ts';
 
-const AUTH = { Authorization: `Basic ${btoa('admin:secret')}` };
+const AUTH = { Authorization: `Basic ${btoa('admin:secret-test-pass')}` };
 
 describe('/admin', () => {
   it('rejects requests without valid Basic Auth', async () => {
@@ -124,7 +125,7 @@ describe('/admin/zoom', () => {
     const form = new URLSearchParams({ clientId: 'client-123', clientSecret: 'super-secret-value', accountId: 'account-456' });
     const response = await SELF.fetch('https://example.com/admin/zoom', {
       method: 'POST',
-      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://example.com' },
       body: form.toString(),
       redirect: 'manual',
     });
@@ -141,10 +142,11 @@ describe('/admin/zoom', () => {
   it('rejects a submission with a missing field', async () => {
     const response = await SELF.fetch('https://example.com/admin/zoom', {
       method: 'POST',
-      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://example.com' },
       body: new URLSearchParams({ clientId: 'x', accountId: 'y' }).toString(),
     });
     expect(response.status).toBe(400);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
     expect(await getZoomConfig(env.DB)).toBeNull();
   });
 });
@@ -156,7 +158,7 @@ describe('/admin/settings', () => {
 
     const on = await SELF.fetch('https://example.com/admin/settings', {
       method: 'POST',
-      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://example.com' },
       body: 'servingEnabled=on',
       redirect: 'manual',
     });
@@ -168,7 +170,7 @@ describe('/admin/settings', () => {
 
     await SELF.fetch('https://example.com/admin/settings', {
       method: 'POST',
-      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://example.com' },
       body: '',
       redirect: 'manual',
     });
@@ -179,6 +181,27 @@ describe('/admin/settings', () => {
     const response = await SELF.fetch('https://example.com/admin/nope', { headers: AUTH });
     expect(response.status).toBe(404);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('rejects a cross-site POST even with valid auth, and leaves the setting unchanged', async () => {
+    const response = await SELF.fetch('https://example.com/admin/settings', {
+      method: 'POST',
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://evil.example' },
+      body: 'servingEnabled=on',
+      redirect: 'manual',
+    });
+    expect(response.status).toBe(403);
+    expect(await isServingEnabled(env.DB)).toBe(false);
+  });
+
+  it('accepts a same-origin POST identified via Sec-Fetch-Site with no Origin header', async () => {
+    const response = await SELF.fetch('https://example.com/admin/settings', {
+      method: 'POST',
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded', 'Sec-Fetch-Site': 'same-origin' },
+      body: 'servingEnabled=on',
+      redirect: 'manual',
+    });
+    expect(response.status).toBe(303);
   });
 });
 
@@ -193,7 +216,7 @@ describe('/admin/profiles', () => {
   const post = (path: string, body: string) =>
     SELF.fetch(`https://example.com${path}`, {
       method: 'POST',
-      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://example.com' },
       body,
       redirect: 'manual',
     });
@@ -230,7 +253,11 @@ describe('/admin/profiles', () => {
 
 describe('/admin/zoom/sync', () => {
   it('runs a sync and redirects back with the result recorded', async () => {
-    const response = await SELF.fetch('https://example.com/admin/zoom/sync', { method: 'POST', headers: AUTH, redirect: 'manual' });
+    const response = await SELF.fetch('https://example.com/admin/zoom/sync', {
+      method: 'POST',
+      headers: { ...AUTH, Origin: 'https://example.com' },
+      redirect: 'manual',
+    });
     expect(response.status).toBe(303);
     expect(response.headers.get('Location')).toBe('https://example.com/admin/zoom');
     const html = await (await SELF.fetch('https://example.com/admin/zoom', { headers: AUTH })).text();
@@ -317,5 +344,18 @@ describe('provisioning endpoint (phase 2)', () => {
         'CREATE TABLE provisioning_profiles (model TEXT PRIMARY KEY, vendor TEXT NOT NULL, zoom_url TEXT, enabled INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)',
       );
     }
+  });
+});
+
+describe('admin disabled when ADMIN_PASSWORD is unset or too weak', () => {
+  it('503s the admin panel instead of allowing an empty password', async () => {
+    const response = await worker.fetch(new Request('https://example.com/admin'), { ...env, ADMIN_PASSWORD: '' });
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('leaves the provisioning path unaffected', async () => {
+    const response = await worker.fetch(new Request('https://example.com/x.cfg'), { ...env, ADMIN_PASSWORD: '' });
+    expect(response.status).toBe(404);
   });
 });

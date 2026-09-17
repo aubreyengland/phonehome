@@ -76,6 +76,11 @@ describe('decideResponse', () => {
   it('answers HEAD like GET but with an empty body', () => {
     expect(decideResponse('HEAD', macCfg, ready)).toMatchObject({ status: 200, kind: 'redirect', body: '' });
   });
+
+  it('degrades to a logged 404 instead of throwing when the stored zoomUrl is malformed', () => {
+    const bad: ServeContext = { ...ready, profile: { ...ready.profile!, zoomUrl: 'https://x/\nstatic.security.user_password = pwn' } };
+    expect(decideResponse('GET', macCfg, bad)).toEqual({ status: 404, kind: 'not_found', reason: 'bad-zoom-url', body: '', contentType: 'text/plain' });
+  });
 });
 
 describe('loadServeContext', () => {

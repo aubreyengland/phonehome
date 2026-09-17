@@ -45,5 +45,6 @@ describe('unauthorizedResponse', () => {
     const response = unauthorizedResponse();
     expect(response.status).toBe(401);
     expect(response.headers.get('WWW-Authenticate')).toContain('Basic');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 });

@@ -37,6 +37,6 @@ export function checkBasicAuth(request: Request, expectedUser: string, expectedP
 export function unauthorizedResponse(): Response {
   return new Response('Unauthorized', {
     status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="admin"' },
+    headers: { 'WWW-Authenticate': 'Basic realm="admin"', 'Cache-Control': 'no-store' },
   });
 }

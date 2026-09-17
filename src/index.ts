@@ -107,7 +107,10 @@ const saveZoomCredentials: Handler = async (request, env, url) => {
   const clientSecret = String(form.get('clientSecret') ?? '');
   const accountId = String(form.get('accountId') ?? '').trim();
   if (!clientId || !clientSecret || !accountId) {
-    return new Response('clientId, clientSecret, and accountId are all required', { status: 400 });
+    return new Response('clientId, clientSecret, and accountId are all required', {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
   await saveZoomConfig(env.DB, {
     clientId,
@@ -189,13 +192,33 @@ function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
+/** CSRF defence for state-changing admin POSTs: require same-origin via Sec-Fetch-Site or Origin. */
+function isSameOriginPost(request: Request, url: URL): boolean {
+  if (request.headers.get('Sec-Fetch-Site') === 'same-origin') {
+    return true;
+  }
+  return request.headers.get('Origin') === url.origin;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (isAdminPath(url.pathname)) {
+      if (!env.ADMIN_PASSWORD || env.ADMIN_PASSWORD.length < 12) {
+        return new Response('Admin disabled: ADMIN_PASSWORD secret is not set', {
+          status: 503,
+          headers: { 'Cache-Control': 'no-store' },
+        });
+      }
       if (!checkBasicAuth(request, env.ADMIN_USER, env.ADMIN_PASSWORD)) {
         return unauthorizedResponse();
+      }
+      if (request.method === 'POST' && !isSameOriginPost(request, url)) {
+        return new Response('Cross-site request rejected', {
+          status: 403,
+          headers: { 'Cache-Control': 'no-store' },
+        });
       }
       const handler = ADMIN_ROUTES[`${request.method} ${url.pathname}`];
       return handler

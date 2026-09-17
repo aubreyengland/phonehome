@@ -30,6 +30,12 @@ export function guessVendor(model: string): Vendor {
 }
 
 export function isValidZoomUrl(value: string): boolean {
+  // new URL() silently strips control/whitespace characters (CR, LF, tab, space, etc.) before
+  // parsing, so a string containing them could pass validation here yet still carry the raw
+  // control characters into storage and, later, into a generated config file. Reject them outright.
+  if (/[\s\x00-\x1f]/.test(value)) {
+    return false;
+  }
   try {
     return new URL(value).protocol === 'https:';
   } catch {
