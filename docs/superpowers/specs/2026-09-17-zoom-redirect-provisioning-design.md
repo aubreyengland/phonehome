@@ -134,6 +134,7 @@ zoom_devices                   -- mirror of GET /phone/devices; replaced wholesa
   device_type     TEXT
   assignee        TEXT               -- display name / extension as Zoom returns it, JSON if object
   status          TEXT
+  raw_json        TEXT NOT NULL      -- the device object as Zoom returned it (field names unverified)
   synced_at       TEXT NOT NULL
 
 settings                       -- key/value
