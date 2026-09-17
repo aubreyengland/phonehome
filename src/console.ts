@@ -54,11 +54,12 @@ let lastId = INITIAL_LAST_ID;
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 function dash(s) { return s == null || s === '' ? '<span class="muted">—</span>' : esc(s); }
+function prettyHeaders(raw) { try { return JSON.stringify(JSON.parse(raw), null, 2); } catch (_) { return String(raw ?? ''); } }
 
 function rowHtml(r) {
   const seenAs = r.manufacturer && r.model ? r.manufacturer + ' ' + r.model : (r.manufacturer || r.model || '');
   const text = [r.macAddress, r.path, r.userAgent, r.responseReason, r.sourceIp, seenAs].join(' ').toLowerCase();
-  return '<tr class="kind-' + esc(r.responseKind) + '" data-text="' + esc(text) + '" data-id="' + r.id + '">' +
+  return '<tr class="kind-' + esc(r.responseKind) + '" data-text="' + esc(text) + '" data-id="' + esc(r.id) + '">' +
     '<td>' + esc(r.receivedAt) + '</td>' +
     '<td><span class="badge">' + esc(r.responseStatus) + ' ' + esc(r.responseKind) + '</span> ' + dash(r.responseReason) + '</td>' +
     '<td class="mono">' + dash(r.macAddress) + '</td>' +
@@ -66,7 +67,7 @@ function rowHtml(r) {
     '<td>' + dash(seenAs) + (r.firmware ? ' ' + esc(r.firmware) : '') + '</td>' +
     '<td>' + dash(r.sourceIp) + '</td>' +
     '</tr>' +
-    '<tr class="details" hidden><td colspan="6"><pre>' + esc(r.userAgent || '(no User-Agent)') + '\\n\\n' + esc(JSON.stringify(JSON.parse(r.headersJson), null, 2)) + '</pre></td></tr>';
+    '<tr class="details" hidden><td colspan="6"><pre>' + esc(r.userAgent || '(no User-Agent)') + '\\n\\n' + esc(prettyHeaders(r.headersJson)) + '</pre></td></tr>';
 }
 
 function applyFilter() {

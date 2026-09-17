@@ -67,4 +67,33 @@ describe('renderConsolePage', () => {
     expect(html).toContain('id="pause"');
     expect(html).toContain('id="filter"');
   });
+
+  it('parses headers defensively client-side instead of a raw double JSON.parse', () => {
+    const html = renderConsolePage([]);
+    expect(html).toContain('prettyHeaders(');
+    expect(html).not.toContain('JSON.parse(JSON.parse(');
+  });
+
+  it('still embeds a row with unparsable headersJson (the page render never executes the client script)', () => {
+    const html = renderConsolePage([
+      {
+        id: 1,
+        receivedAt: 't',
+        sourceIp: null,
+        macAddress: null,
+        manufacturer: null,
+        model: null,
+        firmware: null,
+        httpMethod: 'GET',
+        path: '/malformed-headers.cfg',
+        queryString: '',
+        userAgent: null,
+        headersJson: 'not json',
+        responseStatus: 404,
+        responseKind: 'not_found',
+        responseReason: 'unknown-file',
+      },
+    ]);
+    expect(html).toContain('/malformed-headers.cfg');
+  });
 });
