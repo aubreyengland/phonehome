@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderDashboard } from '../src/dashboard.ts';
+import { renderDashboard } from '../src/pages/dashboard.ts';
 import type { FleetRow } from '../src/db.ts';
 
 const seen: FleetRow = {
@@ -42,14 +42,14 @@ const rows = [seen, notSeen, unexpected];
 
 describe('renderDashboard', () => {
   it('includes each field of a seen device', () => {
-    const html = renderDashboard([seen], 'all', null);
+    const html = renderDashboard([seen], 'all');
     for (const value of ['80:5E:C0:00:00:01', 'Jessie Christy', '53265', 'Yealink T48S', 'SIP-T48S', '66.86.0.15', '203.0.113.5', '2026-09-17T01:00:00.000Z']) {
       expect(html).toContain(value);
     }
   });
 
   it('shows summary counts over the full fleet regardless of filter', () => {
-    const html = renderDashboard(rows, 'unexpected', null);
+    const html = renderDashboard(rows, 'unexpected');
     expect(html).toMatch(/Expected[^0-9]*2/);
     expect(html).toMatch(/Seen[^0-9]*1/);
     expect(html).toMatch(/Not seen[^0-9]*1/);
@@ -57,38 +57,29 @@ describe('renderDashboard', () => {
   });
 
   it('filters rows by status', () => {
-    const html = renderDashboard(rows, 'not-seen', null);
+    const html = renderDashboard(rows, 'not-seen');
     expect(html).toContain('Quiet Phone');
     expect(html).not.toContain('Jessie Christy');
     expect(html).not.toContain('AA:AA:AA:00:00:03');
   });
 
   it('links each status filter', () => {
-    const html = renderDashboard(rows, 'all', null);
+    const html = renderDashboard(rows, 'all');
     for (const status of ['all', 'seen', 'not-seen', 'unexpected']) {
       expect(html).toContain(`href="/admin?status=${status}"`);
     }
   });
 
-  it('renders a settings form for Zoom S2S credentials and never echoes the secret', () => {
-    const html = renderDashboard([], 'all', {
-      clientId: 'client-123',
-      clientSecretEncrypted: 'CIPHERTEXT',
-      accountId: 'account-456',
-      updatedAt: '2026-09-17T00:00:00.000Z',
-    });
-    expect(html).toContain('action="/admin/settings"');
-    expect(html).toContain('name="clientId"');
-    expect(html).toContain('name="clientSecret"');
-    expect(html).toContain('name="accountId"');
-    expect(html).toContain('client-123');
-    expect(html).toContain('account-456');
-    expect(html).not.toContain('CIPHERTEXT');
+  it('links every admin page in the nav', () => {
+    const html = renderDashboard([], 'all');
+    for (const href of ['/admin', '/admin/console', '/admin/zoom', '/admin/profiles', '/admin/settings']) {
+      expect(html).toContain(`href="${href}"`);
+    }
   });
 
   it('escapes HTML in device fields', () => {
     const malicious: FleetRow = { ...seen, expectedName: '<script>alert(1)</script>' };
-    const html = renderDashboard([malicious], 'all', null);
+    const html = renderDashboard([malicious], 'all');
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });

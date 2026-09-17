@@ -1,9 +1,25 @@
 import type { Env } from './types.ts';
 import { parseDevice } from './parse.ts';
-import { getZoomConfig, insertRequestLog, listFleet, saveZoomConfig } from './db.ts';
+import { SETTING, getSetting, getZoomConfig, insertRequestLog, isServingEnabled, listFleet, saveZoomConfig, setSetting } from './db.ts';
 import { checkBasicAuth, unauthorizedResponse } from './auth.ts';
-import { parseFleetFilter, renderDashboard } from './dashboard.ts';
+import { parseFleetFilter, renderDashboard } from './pages/dashboard.ts';
+import { renderZoomPage } from './pages/zoom.ts';
+import { renderSettingsPage } from './pages/settings.ts';
+import { countZoomDevices } from './zoom.ts';
 import { encryptSecret } from './crypto.ts';
+
+type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
+
+export function htmlResponse(body: string, status = 200): Response {
+  return new Response(body, {
+    status,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
+function redirect(url: URL, path: string): Response {
+  return Response.redirect(`${url.origin}${path}`, 303);
+}
 
 function sourceIpOf(request: Request): string | null {
   const cfIp = request.headers.get('CF-Connecting-IP');
@@ -43,17 +59,22 @@ async function captureProvisioningRequest(request: Request, env: Env, url: URL):
   return new Response('', { status: 200, headers: { 'Content-Type': 'text/plain' } });
 }
 
-async function renderAdmin(env: Env, url: URL): Promise<Response> {
-  const [fleet, zoomConfig] = await Promise.all([listFleet(env.DB), getZoomConfig(env.DB)]);
-  const html = renderDashboard(fleet, parseFleetFilter(url.searchParams.get('status')), zoomConfig);
-  return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
-}
+const dashboard: Handler = async (_request, env, url) => {
+  const fleet = await listFleet(env.DB);
+  return htmlResponse(renderDashboard(fleet, parseFleetFilter(url.searchParams.get('status'))));
+};
 
-async function saveSettings(request: Request, env: Env, url: URL): Promise<Response> {
-  if (request.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
-  }
+const zoomPage: Handler = async (_request, env) => {
+  const [config, lastSyncAt, lastSyncResult, deviceCount] = await Promise.all([
+    getZoomConfig(env.DB),
+    getSetting(env.DB, SETTING.lastZoomSyncAt),
+    getSetting(env.DB, SETTING.lastZoomSyncResult),
+    countZoomDevices(env.DB),
+  ]);
+  return htmlResponse(renderZoomPage({ config, lastSyncAt, lastSyncResult, deviceCount }));
+};
 
+const saveZoomCredentials: Handler = async (request, env, url) => {
   const form = await request.formData();
   const clientId = String(form.get('clientId') ?? '').trim();
   const clientSecret = String(form.get('clientSecret') ?? '');
@@ -61,26 +82,46 @@ async function saveSettings(request: Request, env: Env, url: URL): Promise<Respo
   if (!clientId || !clientSecret || !accountId) {
     return new Response('clientId, clientSecret, and accountId are all required', { status: 400 });
   }
-
   await saveZoomConfig(env.DB, {
     clientId,
     clientSecretEncrypted: await encryptSecret(clientSecret, env.ENCRYPTION_KEY),
     accountId,
     updatedAt: new Date().toISOString(),
   });
+  return redirect(url, '/admin/zoom');
+};
 
-  return Response.redirect(`${url.origin}/admin`, 303);
+const settingsPage: Handler = async (_request, env) => htmlResponse(renderSettingsPage(await isServingEnabled(env.DB)));
+
+const saveSettings: Handler = async (request, env, url) => {
+  const form = await request.formData();
+  await setSetting(env.DB, SETTING.servingEnabled, form.get('servingEnabled') === 'on' ? '1' : '0');
+  return redirect(url, '/admin/settings');
+};
+
+/** `"METHOD /path"` -> handler. Every entry is behind Basic Auth. Later tasks add rows here. */
+const ADMIN_ROUTES: Record<string, Handler> = {
+  'GET /admin': dashboard,
+  'GET /admin/zoom': zoomPage,
+  'POST /admin/zoom': saveZoomCredentials,
+  'GET /admin/settings': settingsPage,
+  'POST /admin/settings': saveSettings,
+};
+
+function isAdminPath(pathname: string): boolean {
+  return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === '/admin' || url.pathname === '/admin/settings') {
+    if (isAdminPath(url.pathname)) {
       if (!checkBasicAuth(request, env.ADMIN_USER, env.ADMIN_PASSWORD)) {
         return unauthorizedResponse();
       }
-      return url.pathname === '/admin' ? renderAdmin(env, url) : saveSettings(request, env, url);
+      const handler = ADMIN_ROUTES[`${request.method} ${url.pathname}`];
+      return handler ? handler(request, env, url) : new Response('Not Found', { status: 404 });
     }
 
     return captureProvisioningRequest(request, env, url);

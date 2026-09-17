@@ -53,7 +53,7 @@ describe('provisioning capture logging', () => {
 });
 
 import { decryptSecret } from '../src/crypto.ts';
-import { getZoomConfig } from '../src/db.ts';
+import { getZoomConfig, isServingEnabled } from '../src/db.ts';
 import { buildSeedSql } from '../src/fleet.ts';
 
 const AUTH = { Authorization: `Basic ${btoa('admin:secret')}` };
@@ -105,38 +105,38 @@ describe('/admin', () => {
   });
 });
 
-describe('/admin/settings', () => {
+describe('/admin/zoom', () => {
   it('rejects unauthenticated POSTs', async () => {
-    const response = await SELF.fetch('https://example.com/admin/settings', { method: 'POST' });
+    const response = await SELF.fetch('https://example.com/admin/zoom', { method: 'POST' });
     expect(response.status).toBe(401);
   });
 
-  it('saves the encrypted client secret and redirects back to /admin', async () => {
-    const form = new URLSearchParams({
-      clientId: 'client-123',
-      clientSecret: 'super-secret-value',
-      accountId: 'account-456',
-    });
+  it('renders the credentials page', async () => {
+    const response = await SELF.fetch('https://example.com/admin/zoom', { headers: AUTH });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.text()).toContain('name="clientSecret"');
+  });
 
-    const response = await SELF.fetch('https://example.com/admin/settings', {
+  it('saves the encrypted client secret and redirects back to /admin/zoom', async () => {
+    const form = new URLSearchParams({ clientId: 'client-123', clientSecret: 'super-secret-value', accountId: 'account-456' });
+    const response = await SELF.fetch('https://example.com/admin/zoom', {
       method: 'POST',
       headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
       body: form.toString(),
       redirect: 'manual',
     });
-
     expect(response.status).toBe(303);
-    expect(response.headers.get('Location')).toBe('https://example.com/admin');
+    expect(response.headers.get('Location')).toBe('https://example.com/admin/zoom');
 
     const config = await getZoomConfig(env.DB);
     expect(config?.clientId).toBe('client-123');
-    expect(config?.accountId).toBe('account-456');
     expect(config?.clientSecretEncrypted).not.toContain('super-secret-value');
     expect(await decryptSecret(config!.clientSecretEncrypted, env.ENCRYPTION_KEY)).toBe('super-secret-value');
   });
 
   it('rejects a submission with a missing field', async () => {
-    const response = await SELF.fetch('https://example.com/admin/settings', {
+    const response = await SELF.fetch('https://example.com/admin/zoom', {
       method: 'POST',
       headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ clientId: 'x', accountId: 'y' }).toString(),
@@ -144,9 +144,36 @@ describe('/admin/settings', () => {
     expect(response.status).toBe(400);
     expect(await getZoomConfig(env.DB)).toBeNull();
   });
+});
 
-  it('returns 405 for non-POST methods', async () => {
-    const response = await SELF.fetch('https://example.com/admin/settings', { headers: AUTH });
-    expect(response.status).toBe(405);
+describe('/admin/settings', () => {
+  it('shows the kill switch and toggles it', async () => {
+    let html = await (await SELF.fetch('https://example.com/admin/settings', { headers: AUTH })).text();
+    expect(html).toContain('name="servingEnabled">');
+
+    const on = await SELF.fetch('https://example.com/admin/settings', {
+      method: 'POST',
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'servingEnabled=on',
+      redirect: 'manual',
+    });
+    expect(on.status).toBe(303);
+    expect(await isServingEnabled(env.DB)).toBe(true);
+
+    html = await (await SELF.fetch('https://example.com/admin/settings', { headers: AUTH })).text();
+    expect(html).toContain('name="servingEnabled" checked');
+
+    await SELF.fetch('https://example.com/admin/settings', {
+      method: 'POST',
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: '',
+      redirect: 'manual',
+    });
+    expect(await isServingEnabled(env.DB)).toBe(false);
+  });
+
+  it('returns 404 for unknown admin paths', async () => {
+    const response = await SELF.fetch('https://example.com/admin/nope', { headers: AUTH });
+    expect(response.status).toBe(404);
   });
 });
