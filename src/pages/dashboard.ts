@@ -7,6 +7,8 @@ export interface DashboardHeader {
   servingEnabled: boolean;
   lastZoomSyncAt: string | null;
   zoomDeviceCount: number;
+  /** True when no provisioning IP allowlist is configured, i.e. the endpoint answers every IP. */
+  allowlistEmpty: boolean;
 }
 
 const FILTERS: { value: FleetFilter; label: string }[] = [
@@ -54,6 +56,7 @@ export function renderDashboard(rows: FleetRow[], filter: FleetFilter, header: D
   ).join(' ');
 
   const body = `  <h1>Provisioning Inventory</h1>
+  ${header.allowlistEmpty ? '<div class="warn"><strong>No IP allowlist.</strong> The provisioning endpoint answers every IP on the internet. Set one under <a href="/admin/settings">Settings</a>.</div>' : ''}
   <p>Serving <span class="badge ${header.servingEnabled ? 'on' : 'off'}">${header.servingEnabled ? 'ON' : 'OFF'}</span>
   · Zoom mirror: ${header.zoomDeviceCount} devices, synced ${header.lastZoomSyncAt ? escapeHtml(header.lastZoomSyncAt) : 'never'}</p>
   <div class="summary">

@@ -359,3 +359,99 @@ describe('admin disabled when ADMIN_PASSWORD is unset or too weak', () => {
     expect(response.status).toBe(404);
   });
 });
+
+import { listBlockedIps } from '../src/blocked.ts';
+import { getSetting } from '../src/db.ts';
+
+describe('IP allowlists', () => {
+  const FORM = { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded', Origin: 'https://example.com' };
+  const requestCount = async () => (await env.DB.prepare('SELECT COUNT(*) AS n FROM provisioning_requests').first<{ n: number }>())?.n;
+
+  it('provisioning: empty allowlist admits every IP (and no CF-Connecting-IP at all)', async () => {
+    expect((await SELF.fetch('https://example.com/y000000000065.cfg')).status).toBe(404);
+    expect(await requestCount()).toBe(1);
+    expect(await listBlockedIps(env.DB)).toEqual([]);
+  });
+
+  it('provisioning: outsiders get 404, are not logged, and are counted; insiders are logged', async () => {
+    await setSetting(env.DB, SETTING.allowedIps, '203.0.113.0/24\n# lab\n198.51.100.7');
+
+    const outsider = await SELF.fetch('https://example.com/805ec0aabbcc.cfg', { headers: { 'CF-Connecting-IP': '130.12.180.117' } });
+    expect(outsider.status).toBe(404);
+    expect(await outsider.text()).toBe('');
+    expect(outsider.headers.get('Cache-Control')).toBe('no-store');
+    await SELF.fetch('https://example.com/.env', { headers: { 'CF-Connecting-IP': '130.12.180.117' } });
+    await SELF.fetch('https://example.com/.env'); // no CF header at all -> blocked too
+
+    const insider = await SELF.fetch('https://example.com/y000000000065.cfg', { headers: { 'CF-Connecting-IP': '203.0.113.9' } });
+    expect(insider.status).toBe(404); // unknown file, but it IS logged
+    const upload = await SELF.fetch('https://example.com/64167f4b6be7-phone.cfg', { method: 'PUT', body: 'x', headers: { 'CF-Connecting-IP': '198.51.100.7' } });
+    expect(upload.status).toBe(200);
+
+    expect(await requestCount()).toBe(2);
+    expect(await listBlockedIps(env.DB)).toEqual([
+      expect.objectContaining({ ip: '130.12.180.117', count: 2, lastPath: '/.env' }),
+      expect.objectContaining({ ip: '(no CF-Connecting-IP)', count: 1 }),
+    ]);
+  });
+
+  it('admin: outsiders get 403 before any password prompt; insiders proceed to auth', async () => {
+    await setSetting(env.DB, SETTING.adminAllowedIps, '203.0.113.9');
+    const outsider = await SELF.fetch('https://example.com/admin', { headers: { ...AUTH, 'CF-Connecting-IP': '130.12.180.117' } });
+    expect(outsider.status).toBe(403);
+    expect(outsider.headers.get('WWW-Authenticate')).toBeNull();
+    expect(outsider.headers.get('Cache-Control')).toBe('no-store');
+    expect((await SELF.fetch('https://example.com/admin/api/requests', { headers: { ...AUTH, 'CF-Connecting-IP': '130.12.180.117' } })).status).toBe(403);
+
+    expect((await SELF.fetch('https://example.com/admin', { headers: { 'CF-Connecting-IP': '203.0.113.9' } })).status).toBe(401);
+    expect((await SELF.fetch('https://example.com/admin', { headers: { ...AUTH, 'CF-Connecting-IP': '203.0.113.9' } })).status).toBe(200);
+  });
+
+  it('settings: saves both lists and the switch together', async () => {
+    const body = new URLSearchParams({ servingEnabled: 'on', allowedIps: '203.0.113.0/24\r\n198.51.100.7', adminAllowedIps: '203.0.113.9' });
+    const response = await SELF.fetch('https://example.com/admin/settings', {
+      method: 'POST', headers: { ...FORM, 'CF-Connecting-IP': '203.0.113.9' }, body: body.toString(), redirect: 'manual',
+    });
+    expect(response.status).toBe(303);
+    expect(await isServingEnabled(env.DB)).toBe(true);
+    expect(await getSetting(env.DB, SETTING.allowedIps)).toBe('203.0.113.0/24\n198.51.100.7');
+    expect(await getSetting(env.DB, SETTING.adminAllowedIps)).toBe('203.0.113.9');
+    const html = await (await SELF.fetch('https://example.com/admin/settings', { headers: { ...AUTH, 'CF-Connecting-IP': '203.0.113.9' } })).text();
+    expect(html).toContain('203.0.113.0/24\n198.51.100.7');
+  });
+
+  it('settings: rejects a bad line with 400, re-renders the submitted text, saves nothing', async () => {
+    const body = new URLSearchParams({ allowedIps: '203.0.113.5\nnope', adminAllowedIps: '' });
+    const response = await SELF.fetch('https://example.com/admin/settings', { method: 'POST', headers: FORM, body: body.toString() });
+    expect(response.status).toBe(400);
+    const html = await response.text();
+    expect(html).toContain('Not saved.');
+    expect(html).toContain('line 2: &quot;nope&quot;');
+    expect(html).toContain('203.0.113.5\nnope');
+    expect(await getSetting(env.DB, SETTING.allowedIps)).toBeNull();
+  });
+
+  it('settings: refuses an admin list that would lock the current admin out', async () => {
+    const body = new URLSearchParams({ adminAllowedIps: '10.0.0.0/8' });
+    const response = await SELF.fetch('https://example.com/admin/settings', {
+      method: 'POST', headers: { ...FORM, 'CF-Connecting-IP': '203.0.113.9' }, body: body.toString(),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain('would lock you out: your IP is 203.0.113.9');
+    expect(await getSetting(env.DB, SETTING.adminAllowedIps)).toBeNull();
+  });
+
+  it('purge removes request rows from outsiders and resets blocked counters', async () => {
+    await SELF.fetch('https://example.com/a.cfg', { headers: { 'CF-Connecting-IP': '203.0.113.9' } });
+    await SELF.fetch('https://example.com/b.cfg', { headers: { 'CF-Connecting-IP': '130.12.180.117' } });
+    await setSetting(env.DB, SETTING.allowedIps, '203.0.113.0/24');
+    await SELF.fetch('https://example.com/c.cfg', { headers: { 'CF-Connecting-IP': '130.12.180.117' } }); // counted, not logged
+    expect(await requestCount()).toBe(2);
+
+    const response = await SELF.fetch('https://example.com/admin/settings/purge', { method: 'POST', headers: FORM, redirect: 'manual' });
+    expect(response.status).toBe(303);
+    expect(await requestCount()).toBe(1);
+    expect((await env.DB.prepare('SELECT source_ip FROM provisioning_requests').first())?.source_ip).toBe('203.0.113.9');
+    expect(await listBlockedIps(env.DB)).toEqual([]);
+  });
+});

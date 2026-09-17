@@ -43,6 +43,8 @@ const CSS = `
   form input[type=text], form input[type=password], form input[type=url] { width: 28rem; max-width: 100%; }
   button { cursor: pointer; }
   pre { background: #f5f5f5; padding: .5rem; overflow: auto; white-space: pre-wrap; }
+  .warn { background: #f8d7da; border: 1px solid #e0a0a6; border-radius: 6px; padding: .5rem .75rem; margin: 1rem 0; }
+  textarea { font-family: ui-monospace, monospace; }
 `;
 
 export function renderPage(title: string, active: NavKey, body: string, extraHead = ''): string {

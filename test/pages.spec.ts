@@ -43,9 +43,33 @@ describe('renderZoomPage', () => {
 });
 
 describe('renderSettingsPage', () => {
+  const base = { servingEnabled: false, allowedIpsText: '', adminAllowedIpsText: '', blocked: [], errors: [] };
+
   it('reflects the kill switch state', () => {
-    expect(renderSettingsPage(true)).toContain('name="servingEnabled" checked');
-    expect(renderSettingsPage(false)).toContain('name="servingEnabled">');
-    expect(renderSettingsPage(false)).toContain('action="/admin/settings"');
+    expect(renderSettingsPage({ ...base, servingEnabled: true })).toContain('name="servingEnabled" checked');
+    expect(renderSettingsPage(base)).toContain('name="servingEnabled">');
+    expect(renderSettingsPage(base)).toContain('action="/admin/settings"');
+  });
+
+  it('renders both allowlists, escaped, and the purge form', () => {
+    const html = renderSettingsPage({ ...base, allowedIpsText: '203.0.113.0/24 # <office>', adminAllowedIpsText: '198.51.100.7' });
+    expect(html).toContain('name="allowedIps"');
+    expect(html).toContain('203.0.113.0/24 # &lt;office&gt;');
+    expect(html).toContain('name="adminAllowedIps"');
+    expect(html).toContain('198.51.100.7');
+    expect(html).toContain('action="/admin/settings/purge"');
+  });
+
+  it('lists blocked IPs with counts and shows validation errors', () => {
+    const html = renderSettingsPage({
+      ...base,
+      blocked: [{ ip: '130.12.180.117', count: 132, firstSeen: 't1', lastSeen: 't2', lastPath: '/.env' }],
+      errors: ['Allowed IPs line 2: "nope" — not an IP address or CIDR'],
+    });
+    expect(html).toContain('130.12.180.117');
+    expect(html).toContain('<td class="num">132</td>');
+    expect(html).toContain('/.env');
+    expect(html).toContain('Not saved.');
+    expect(html).toContain('line 2: &quot;nope&quot;');
   });
 });

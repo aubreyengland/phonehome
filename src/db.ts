@@ -149,6 +149,8 @@ export const SETTING = {
   servingEnabled: 'serving_enabled',
   lastZoomSyncAt: 'last_zoom_sync_at',
   lastZoomSyncResult: 'last_zoom_sync_result',
+  allowedIps: 'allowed_ips',
+  adminAllowedIps: 'admin_allowed_ips',
 } as const;
 
 export type SettingKey = (typeof SETTING)[keyof typeof SETTING];

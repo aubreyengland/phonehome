@@ -5,12 +5,14 @@ import { SETTING, getSetting, getZoomConfig, insertRequestLog, isServingEnabled,
 import { checkBasicAuth, unauthorizedResponse } from './auth.ts';
 import { parseFleetFilter, renderDashboard } from './pages/dashboard.ts';
 import { renderZoomPage } from './pages/zoom.ts';
-import { renderSettingsPage } from './pages/settings.ts';
+import { renderSettingsPage, type SettingsView } from './pages/settings.ts';
 import { renderProfilesPage } from './pages/profiles.ts';
 import { countZoomDevices, syncZoomDevices } from './zoom.ts';
 import { encryptSecret } from './crypto.ts';
 import { isValidZoomUrl, listProfiles, parseVendor, refreshProfiles, saveProfile } from './profiles.ts';
 import { classifyRequest, contextErrorDecision, decideResponse, loadServeContext, type ServeContext } from './serve.ts';
+import { ipAllowed, parseAllowlist, type AllowEntry } from './ipallow.ts';
+import { clearBlockedIps, deleteRequestsFromIps, listBlockedIps, listRequestSourceIps, recordBlockedIp } from './blocked.ts';
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
 
@@ -37,7 +39,33 @@ function sourceIpOf(request: Request): string | null {
   return forwarded ? (forwarded.split(',')[0]?.trim() ?? null) : null;
 }
 
+/** The IP Cloudflare saw. Only this header is trusted for allowlist decisions; X-Forwarded-For is spoofable. */
+function clientIpOf(request: Request): string | null {
+  return request.headers.get('CF-Connecting-IP');
+}
+
+async function loadAllowlist(env: Env, key: typeof SETTING.allowedIps | typeof SETTING.adminAllowedIps): Promise<AllowEntry[]> {
+  return parseAllowlist((await getSetting(env.DB, key)) ?? '').entries;
+}
+
+function blockedResponse(status: number, body: string): Response {
+  return new Response(body, { status, headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' } });
+}
+
 async function handleProvisioning(request: Request, env: Env, url: URL): Promise<Response> {
+  const allowlist = await loadAllowlist(env, SETTING.allowedIps);
+  if (allowlist.length > 0) {
+    const ip = clientIpOf(request);
+    if (!ipAllowed(ip, allowlist)) {
+      try {
+        await recordBlockedIp(env.DB, ip ?? '(no CF-Connecting-IP)', url.pathname, new Date().toISOString());
+      } catch (error) {
+        console.error('failed to record blocked ip', error);
+      }
+      return blockedResponse(404, '');
+    }
+  }
+
   const userAgent = request.headers.get('User-Agent');
   const parsed = parseDevice(url.pathname, url.search, userAgent);
   const file = classifyRequest(url.pathname);
@@ -82,13 +110,21 @@ async function handleProvisioning(request: Request, env: Env, url: URL): Promise
 }
 
 const dashboard: Handler = async (_request, env, url) => {
-  const [fleet, servingEnabled, lastZoomSyncAt, zoomDeviceCount] = await Promise.all([
+  const [fleet, servingEnabled, lastZoomSyncAt, zoomDeviceCount, allowlist] = await Promise.all([
     listFleet(env.DB),
     isServingEnabled(env.DB),
     getSetting(env.DB, SETTING.lastZoomSyncAt),
     countZoomDevices(env.DB),
+    loadAllowlist(env, SETTING.allowedIps),
   ]);
-  return htmlResponse(renderDashboard(fleet, parseFleetFilter(url.searchParams.get('status')), { servingEnabled, lastZoomSyncAt, zoomDeviceCount }));
+  return htmlResponse(
+    renderDashboard(fleet, parseFleetFilter(url.searchParams.get('status')), {
+      servingEnabled,
+      lastZoomSyncAt,
+      zoomDeviceCount,
+      allowlistEmpty: allowlist.length === 0,
+    }),
+  );
 };
 
 const zoomPage: Handler = async (_request, env) => {
@@ -126,11 +162,53 @@ const syncZoom: Handler = async (_request, env, url) => {
   return redirect(url, '/admin/zoom');
 };
 
-const settingsPage: Handler = async (_request, env) => htmlResponse(renderSettingsPage(await isServingEnabled(env.DB)));
+async function settingsView(env: Env, overrides: Partial<SettingsView> = {}): Promise<SettingsView> {
+  const [servingEnabled, allowedIpsText, adminAllowedIpsText, blocked] = await Promise.all([
+    isServingEnabled(env.DB),
+    getSetting(env.DB, SETTING.allowedIps),
+    getSetting(env.DB, SETTING.adminAllowedIps),
+    listBlockedIps(env.DB),
+  ]);
+  return { servingEnabled, allowedIpsText: allowedIpsText ?? '', adminAllowedIpsText: adminAllowedIpsText ?? '', blocked, errors: [], ...overrides };
+}
+
+const settingsPage: Handler = async (_request, env) => htmlResponse(renderSettingsPage(await settingsView(env)));
 
 const saveSettings: Handler = async (request, env, url) => {
   const form = await request.formData();
-  await setSetting(env.DB, SETTING.servingEnabled, form.get('servingEnabled') === 'on' ? '1' : '0');
+  const servingEnabled = form.get('servingEnabled') === 'on';
+  const allowedIpsText = String(form.get('allowedIps') ?? '').replace(/\r\n/g, '\n').trim();
+  const adminAllowedIpsText = String(form.get('adminAllowedIps') ?? '').replace(/\r\n/g, '\n').trim();
+
+  const errors: string[] = [];
+  const allowed = parseAllowlist(allowedIpsText);
+  const admin = parseAllowlist(adminAllowedIpsText);
+  for (const e of allowed.errors) errors.push(`Allowed IPs line ${e.line}: "${e.text}" — ${e.reason}`);
+  for (const e of admin.errors) errors.push(`Admin IPs line ${e.line}: "${e.text}" — ${e.reason}`);
+  const myIp = clientIpOf(request);
+  if (admin.entries.length > 0 && !ipAllowed(myIp, admin.entries)) {
+    errors.push(`Admin IPs would lock you out: your IP is ${myIp ?? 'unknown'} and it is not in the list.`);
+  }
+  if (errors.length > 0) {
+    return htmlResponse(renderSettingsPage(await settingsView(env, { servingEnabled, allowedIpsText, adminAllowedIpsText, errors })), 400);
+  }
+
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(SETTING.servingEnabled, servingEnabled ? '1' : '0'),
+    env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(SETTING.allowedIps, allowedIpsText),
+    env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(SETTING.adminAllowedIps, adminAllowedIpsText),
+  ]);
+  return redirect(url, '/admin/settings');
+};
+
+/** Deletes request-log rows from IPs outside the provisioning allowlist and resets the blocked-IP counters. */
+const purgeBlockedHistory: Handler = async (_request, env, url) => {
+  const allowlist = await loadAllowlist(env, SETTING.allowedIps);
+  if (allowlist.length > 0) {
+    const outsiders = (await listRequestSourceIps(env.DB)).filter((ip) => !ipAllowed(ip, allowlist));
+    await deleteRequestsFromIps(env.DB, outsiders);
+    await clearBlockedIps(env.DB);
+  }
   return redirect(url, '/admin/settings');
 };
 
@@ -183,6 +261,7 @@ const ADMIN_ROUTES: Record<string, Handler> = {
   'POST /admin/zoom/sync': syncZoom,
   'GET /admin/settings': settingsPage,
   'POST /admin/settings': saveSettings,
+  'POST /admin/settings/purge': purgeBlockedHistory,
   'GET /admin/profiles': profilesPage,
   'POST /admin/profiles': saveProfiles,
   'POST /admin/profiles/refresh': refreshProfilesRoute,
@@ -205,6 +284,10 @@ export default {
     const url = new URL(request.url);
 
     if (isAdminPath(url.pathname)) {
+      const adminAllowlist = await loadAllowlist(env, SETTING.adminAllowedIps);
+      if (adminAllowlist.length > 0 && !ipAllowed(clientIpOf(request), adminAllowlist)) {
+        return blockedResponse(403, 'Forbidden');
+      }
       if (!env.ADMIN_PASSWORD || env.ADMIN_PASSWORD.length < 12) {
         return new Response('Admin disabled: ADMIN_PASSWORD secret is not set', {
           status: 503,

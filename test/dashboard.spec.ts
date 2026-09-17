@@ -46,7 +46,7 @@ const unexpected: FleetRow = {
 };
 const rows = [seen, notSeen, unexpected];
 
-const HEADER = { servingEnabled: true, lastZoomSyncAt: '2026-09-17T01:30:00.000Z', zoomDeviceCount: 5 };
+const HEADER = { servingEnabled: true, lastZoomSyncAt: '2026-09-17T01:30:00.000Z', zoomDeviceCount: 5, allowlistEmpty: false };
 
 describe('renderDashboard', () => {
   it('includes each field of a seen device', () => {
@@ -99,5 +99,10 @@ describe('renderDashboard', () => {
     expect(html).toContain('Serving <span class="badge on">ON</span>');
     expect(html).toContain('5 devices');
     expect(renderDashboard([], 'all', { ...HEADER, servingEnabled: false, lastZoomSyncAt: null })).toContain('Serving <span class="badge off">OFF</span>');
+  });
+
+  it('warns when no IP allowlist is configured', () => {
+    expect(renderDashboard([], 'all', { ...HEADER, allowlistEmpty: true })).toContain('No IP allowlist.');
+    expect(renderDashboard([], 'all', HEADER)).not.toContain('No IP allowlist.');
   });
 });
