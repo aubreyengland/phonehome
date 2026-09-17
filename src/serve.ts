@@ -73,6 +73,11 @@ function notFound(reason: string): Decision {
   return { status: 404, kind: 'not_found', reason, body: '', contentType: 'text/plain' };
 }
 
+/** Used when `loadServeContext` itself throws (e.g. D1 unavailable): degrade to a logged 404 rather than an unhandled error. */
+export function contextErrorDecision(): Decision {
+  return notFound('context-error');
+}
+
 /** Pure: every row of the spec §1 table, in gate order. `context` is null when the path has no MAC. */
 export function decideResponse(method: string, file: RequestFile, context: ServeContext | null): Decision {
   if (method === 'PUT' || method === 'POST') {

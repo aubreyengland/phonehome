@@ -280,4 +280,19 @@ describe('provisioning endpoint (phase 2)', () => {
     expect(response.status).toBe(200);
     expect(await lastLog()).toMatchObject({ response_kind: 'accepted', response_reason: 'upload' });
   });
+
+  it('degrades to a logged 404 when loading the serve context throws', async () => {
+    await makeReady();
+    await env.DB.exec('DROP TABLE provisioning_profiles');
+    try {
+      const response = await SELF.fetch('https://example.com/805ec0aabbcc.cfg');
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe('');
+      expect(await lastLog()).toMatchObject({ response_kind: 'not_found', response_reason: 'context-error' });
+    } finally {
+      await env.DB.exec(
+        'CREATE TABLE provisioning_profiles (model TEXT PRIMARY KEY, vendor TEXT NOT NULL, zoom_url TEXT, enabled INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL)',
+      );
+    }
+  });
 });

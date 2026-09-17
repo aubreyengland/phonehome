@@ -9,7 +9,7 @@ import { renderProfilesPage } from './pages/profiles.ts';
 import { countZoomDevices, syncZoomDevices } from './zoom.ts';
 import { encryptSecret } from './crypto.ts';
 import { isValidZoomUrl, listProfiles, parseVendor, refreshProfiles, saveProfile } from './profiles.ts';
-import { classifyRequest, decideResponse, loadServeContext } from './serve.ts';
+import { classifyRequest, contextErrorDecision, decideResponse, loadServeContext, type ServeContext } from './serve.ts';
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
 
@@ -40,8 +40,17 @@ async function handleProvisioning(request: Request, env: Env, url: URL): Promise
   const userAgent = request.headers.get('User-Agent');
   const parsed = parseDevice(url.pathname, url.search, userAgent);
   const file = classifyRequest(url.pathname);
-  const context = file.mac ? await loadServeContext(env.DB, file.mac) : null;
-  const decision = decideResponse(request.method, file, context);
+  let context: ServeContext | null = null;
+  let contextFailed = false;
+  if (file.mac) {
+    try {
+      context = await loadServeContext(env.DB, file.mac);
+    } catch (error) {
+      contextFailed = true;
+      console.error('failed to load serve context', error);
+    }
+  }
+  const decision = contextFailed ? contextErrorDecision() : decideResponse(request.method, file, context);
 
   try {
     await insertRequestLog(env.DB, {
