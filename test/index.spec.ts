@@ -55,6 +55,7 @@ describe('provisioning capture logging', () => {
 import { decryptSecret } from '../src/crypto.ts';
 import { getZoomConfig, isServingEnabled } from '../src/db.ts';
 import { buildSeedSql } from '../src/fleet.ts';
+import { listProfiles } from '../src/profiles.ts';
 
 const AUTH = { Authorization: `Basic ${btoa('admin:secret')}` };
 
@@ -176,5 +177,50 @@ describe('/admin/settings', () => {
     const response = await SELF.fetch('https://example.com/admin/nope', { headers: AUTH });
     expect(response.status).toBe(404);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+});
+
+describe('/admin/profiles', () => {
+  const seed = () =>
+    env.DB.exec(
+      buildSeedSql(
+        [{ macAddress: '80:5E:C0:00:00:01', rcDeviceId: '1', name: 'A', extension: null, model: 'Yealink T48S', rcStatus: null }],
+        '2026-09-17T00:00:00.000Z',
+      ),
+    );
+  const post = (path: string, body: string) =>
+    SELF.fetch(`https://example.com${path}`, {
+      method: 'POST',
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+      redirect: 'manual',
+    });
+
+  it('refreshes models from the expected fleet and renders them', async () => {
+    await seed();
+    expect((await post('/admin/profiles/refresh', '')).status).toBe(303);
+    const html = await (await SELF.fetch('https://example.com/admin/profiles', { headers: AUTH })).text();
+    expect(html).toContain('Yealink T48S');
+    expect(html).toContain('name="zoom_url:Yealink T48S"');
+  });
+
+  it('saves every row of the form', async () => {
+    await seed();
+    await post('/admin/profiles/refresh', '');
+    const body = new URLSearchParams({
+      'vendor:Yealink T48S': 'yealink',
+      'zoom_url:Yealink T48S': 'https://provpp.zoom.us/y/',
+      'enabled:Yealink T48S': 'on',
+    }).toString();
+    expect((await post('/admin/profiles', body)).status).toBe(303);
+    expect((await listProfiles(env.DB))[0]).toMatchObject({ vendor: 'yealink', zoomUrl: 'https://provpp.zoom.us/y/', enabled: true });
+  });
+
+  it('rejects a non-https Zoom URL with 400 and saves nothing', async () => {
+    await seed();
+    await post('/admin/profiles/refresh', '');
+    const response = await post('/admin/profiles', new URLSearchParams({ 'vendor:Yealink T48S': 'yealink', 'zoom_url:Yealink T48S': 'http://x' }).toString());
+    expect(response.status).toBe(400);
+    expect((await listProfiles(env.DB))[0]?.zoomUrl).toBeNull();
   });
 });

@@ -5,8 +5,10 @@ import { checkBasicAuth, unauthorizedResponse } from './auth.ts';
 import { parseFleetFilter, renderDashboard } from './pages/dashboard.ts';
 import { renderZoomPage } from './pages/zoom.ts';
 import { renderSettingsPage } from './pages/settings.ts';
+import { renderProfilesPage } from './pages/profiles.ts';
 import { countZoomDevices } from './zoom.ts';
 import { encryptSecret } from './crypto.ts';
+import { isValidZoomUrl, listProfiles, parseVendor, refreshProfiles, saveProfile } from './profiles.ts';
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
 
@@ -99,6 +101,32 @@ const saveSettings: Handler = async (request, env, url) => {
   return redirect(url, '/admin/settings');
 };
 
+const profilesPage: Handler = async (_request, env) => htmlResponse(renderProfilesPage(await listProfiles(env.DB)));
+
+const refreshProfilesRoute: Handler = async (_request, env, url) => {
+  await refreshProfiles(env.DB, new Date().toISOString());
+  return redirect(url, '/admin/profiles');
+};
+
+const saveProfiles: Handler = async (request, env, url) => {
+  const form = await request.formData();
+  const now = new Date().toISOString();
+  const inputs = (await listProfiles(env.DB)).map((p) => ({
+    model: p.model,
+    vendor: parseVendor(form.get(`vendor:${p.model}`) as string | null),
+    zoomUrl: String(form.get(`zoom_url:${p.model}`) ?? '').trim() || null,
+    enabled: form.get(`enabled:${p.model}`) === 'on',
+  }));
+  const bad = inputs.find((i) => i.zoomUrl !== null && !isValidZoomUrl(i.zoomUrl));
+  if (bad) {
+    return new Response(`Zoom URL for "${bad.model}" must start with https://`, { status: 400 });
+  }
+  for (const input of inputs) {
+    await saveProfile(env.DB, input, now);
+  }
+  return redirect(url, '/admin/profiles');
+};
+
 /** `"METHOD /path"` -> handler. Every entry is behind Basic Auth. Later tasks add rows here. */
 const ADMIN_ROUTES: Record<string, Handler> = {
   'GET /admin': dashboard,
@@ -106,6 +134,9 @@ const ADMIN_ROUTES: Record<string, Handler> = {
   'POST /admin/zoom': saveZoomCredentials,
   'GET /admin/settings': settingsPage,
   'POST /admin/settings': saveSettings,
+  'GET /admin/profiles': profilesPage,
+  'POST /admin/profiles': saveProfiles,
+  'POST /admin/profiles/refresh': refreshProfilesRoute,
 };
 
 function isAdminPath(pathname: string): boolean {
