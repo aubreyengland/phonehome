@@ -82,7 +82,7 @@ fleet queries there, and puts each new feature's queries next to its logic (`pro
   `isServingEnabled(db): Promise<boolean>` in `src/db.ts`. Tables `provisioning_profiles`,
   `zoom_devices`, `settings`.
 
-- [ ] **Step 1: Create the migration**
+- [x] **Step 1: Create the migration**
 
 ```sql
 -- migrations/0003_phase2.sql
@@ -115,7 +115,7 @@ ALTER TABLE provisioning_requests ADD COLUMN response_kind TEXT;
 ALTER TABLE provisioning_requests ADD COLUMN response_reason TEXT;
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 In `test/db.spec.ts`, every object literal passed to `insertRequestLog` (the one in
 `persists a full request log row`, the `checkIn` helper, and the `ignores check-ins that
@@ -179,12 +179,12 @@ describe('settings', () => {
 });
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `npm test -- db.spec.ts`
 Expected: FAIL — `getSetting` is not a function; `response_status` column errors.
 
-- [ ] **Step 4: Update `src/db.ts`**
+- [x] **Step 4: Update `src/db.ts`**
 
 Replace the `RequestLogEntry` interface and `insertRequestLog` at the top of the file:
 
@@ -267,7 +267,7 @@ export async function isServingEnabled(db: D1Database): Promise<boolean> {
 }
 ```
 
-- [ ] **Step 5: Update `src/index.ts` to log the new fields**
+- [x] **Step 5: Update `src/index.ts` to log the new fields**
 
 In `captureProvisioningRequest`, add to the `insertRequestLog` object (Phase 1's inert
 behavior is kept until Task 6 replaces this function):
@@ -278,12 +278,12 @@ behavior is kept until Task 6 replaces this function):
       responseReason: 'phase1-inert',
 ```
 
-- [ ] **Step 6: Run the full suite and typecheck**
+- [x] **Step 6: Run the full suite and typecheck**
 
 Run: `npm test && npx tsc`
 Expected: PASS (tsc catches any `insertRequestLog` call still missing the new fields).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add migrations/0003_phase2.sql src/db.ts src/index.ts test/db.spec.ts
@@ -314,7 +314,7 @@ git commit -m "feat: phase 2 schema, settings store, and response columns on req
   `htmlResponse(body: string, status?: number): Response` and the `ADMIN_ROUTES` pattern
   in `src/index.ts` that later tasks add routes to.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace `test/dashboard.spec.ts` imports and the settings-form test:
 
@@ -466,12 +466,12 @@ describe('/admin/settings', () => {
 
 and add `isServingEnabled` to the existing `import { getZoomConfig } from '../src/db.ts';` line.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test`
 Expected: FAIL — `src/pages/*` don't exist; `/admin/zoom` falls through to the provisioning handler.
 
-- [ ] **Step 3: Create `src/pages/layout.ts`**
+- [x] **Step 3: Create `src/pages/layout.ts`**
 
 ```ts
 // src/pages/layout.ts
@@ -545,7 +545,7 @@ ${body}
 }
 ```
 
-- [ ] **Step 4: Create `src/pages/dashboard.ts` and delete `src/dashboard.ts`**
+- [x] **Step 4: Create `src/pages/dashboard.ts` and delete `src/dashboard.ts`**
 
 ```ts
 // src/pages/dashboard.ts
@@ -620,7 +620,7 @@ ${visible.map(renderRow).join('\n')}
 
 Then `git rm src/dashboard.ts`.
 
-- [ ] **Step 5: Create `src/pages/zoom.ts`, `src/pages/settings.ts`, `src/zoom.ts`**
+- [x] **Step 5: Create `src/pages/zoom.ts`, `src/pages/settings.ts`, `src/zoom.ts`**
 
 ```ts
 // src/pages/zoom.ts
@@ -678,7 +678,7 @@ export async function countZoomDevices(db: D1Database): Promise<number> {
 }
 ```
 
-- [ ] **Step 6: Rewrite `src/index.ts` around an admin routes table**
+- [x] **Step 6: Rewrite `src/index.ts` around an admin routes table**
 
 ```ts
 // src/index.ts
@@ -813,12 +813,12 @@ export default {
 };
 ```
 
-- [ ] **Step 7: Run the full suite and typecheck**
+- [x] **Step 7: Run the full suite and typecheck**
 
 Run: `npm test && npx tsc`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A src test
@@ -841,7 +841,7 @@ git commit -m "feat: split admin into per-page renderers with nav, Zoom page, an
   `saveProfile(db, input: ProfileInput, now: string): Promise<void>`, `isValidZoomUrl(value: string): boolean`
   in `src/profiles.ts`. Task 6 reads `provisioning_profiles` by `model`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // test/profiles.spec.ts
@@ -965,12 +965,12 @@ describe('/admin/profiles', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- profiles.spec.ts index.spec.ts`
 Expected: FAIL — `src/profiles.ts` missing; `/admin/profiles` is 404.
 
-- [ ] **Step 3: Create `src/profiles.ts`**
+- [x] **Step 3: Create `src/profiles.ts`**
 
 ```ts
 // src/profiles.ts
@@ -1054,7 +1054,7 @@ export async function saveProfile(db: D1Database, input: ProfileInput, now: stri
 }
 ```
 
-- [ ] **Step 4: Create `src/pages/profiles.ts` and wire the routes**
+- [x] **Step 4: Create `src/pages/profiles.ts` and wire the routes**
 
 ```ts
 // src/pages/profiles.ts
@@ -1131,12 +1131,12 @@ const saveProfiles: Handler = async (request, env, url) => {
   'POST /admin/profiles/refresh': refreshProfilesRoute,
 ```
 
-- [ ] **Step 5: Run the full suite and typecheck**
+- [x] **Step 5: Run the full suite and typecheck**
 
 Run: `npm test && npx tsc`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/profiles.ts src/pages/profiles.ts src/index.ts test/profiles.spec.ts test/index.spec.ts
@@ -1160,7 +1160,7 @@ git commit -m "feat: provisioning profiles page mapping expected models to Zoom 
   fetchImpl?): Promise<SyncResult>` in `src/zoom.ts`; `POST /admin/zoom/sync`; `scheduled()`
   export. Task 6 reads `zoom_devices` by `mac_address`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // test/zoom.spec.ts
@@ -1310,12 +1310,12 @@ describe('/admin/zoom/sync', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- zoom.spec.ts index.spec.ts`
 Expected: FAIL — functions missing; `/admin/zoom/sync` is 404.
 
-- [ ] **Step 3: Write `src/zoom.ts`**
+- [x] **Step 3: Write `src/zoom.ts`**
 
 ```ts
 // src/zoom.ts
@@ -1472,7 +1472,7 @@ export async function syncZoomDevices(env: Env, fetchImpl: FetchImpl = fetch): P
 }
 ```
 
-- [ ] **Step 4: Add the Sync now form, the route, the cron**
+- [x] **Step 4: Add the Sync now form, the route, the cron**
 
 In `src/pages/zoom.ts`, directly after the `<p>… devices mirrored …</p>` line:
 
@@ -1506,12 +1506,12 @@ In `wrangler.toml`, after the `routes` block:
 crons = ["0 * * * *"]
 ```
 
-- [ ] **Step 5: Run the full suite and typecheck**
+- [x] **Step 5: Run the full suite and typecheck**
 
 Run: `npm test && npx tsc`
 Expected: PASS. (The index test's sync hits real `fetch` only if credentials exist; the test DB has none, so it records `error: Zoom credentials not configured`.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/zoom.ts src/pages/zoom.ts src/index.ts wrangler.toml test/zoom.spec.ts test/index.spec.ts
@@ -1532,7 +1532,7 @@ git commit -m "feat: read-only Zoom device mirror with manual sync and hourly cr
   string): string`, `renderPolyDeviceConfig(zoomUrl: string): string`, `polyServerName(zoomUrl:
   string): string`. Content types are decided by Task 6.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // test/config.spec.ts
@@ -1581,12 +1581,12 @@ describe('poly', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- config.spec.ts`
 Expected: FAIL — modules missing.
 
-- [ ] **Step 3: Write the generators**
+- [x] **Step 3: Write the generators**
 
 ```ts
 // src/config/yealink.ts
@@ -1635,12 +1635,12 @@ export function renderPolyDeviceConfig(zoomUrl: string): string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- config.spec.ts && npx tsc`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/config test/config.spec.ts
@@ -1664,7 +1664,7 @@ git commit -m "feat: Yealink and Poly redirect config generators"
   `decideResponse(method: string, file: RequestFile, context: ServeContext | null): Decision`
   in `src/serve.ts`.
 
-- [ ] **Step 1: Write the failing unit tests**
+- [x] **Step 1: Write the failing unit tests**
 
 ```ts
 // test/serve.spec.ts
@@ -1817,12 +1817,12 @@ Also delete the Phase 1 test `logs unparseable requests with null device fields 
 the request is a POST — it is (`method: 'POST'`), so it stays 200 via `accepted`. No change needed;
 just re-run it.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- serve.spec.ts index.spec.ts`
 Expected: FAIL — `src/serve.ts` missing; endpoint still returns 200 for everything.
 
-- [ ] **Step 3: Write `src/serve.ts`**
+- [x] **Step 3: Write `src/serve.ts`**
 
 ```ts
 // src/serve.ts
@@ -1932,7 +1932,7 @@ export function decideResponse(method: string, file: RequestFile, context: Serve
 }
 ```
 
-- [ ] **Step 4: Replace `captureProvisioningRequest` in `src/index.ts`**
+- [x] **Step 4: Replace `captureProvisioningRequest` in `src/index.ts`**
 
 ```ts
 import { classifyRequest, decideResponse, loadServeContext } from './serve.ts';
@@ -1980,12 +1980,12 @@ Phase 1's smoke test `responds 200 with an empty body for any path` now expects 
 change its two assertions to `expect(response.status).toBe(404)` and keep the empty-body
 check; rename it `responds 404 with an empty body for an unknown MAC file`.
 
-- [ ] **Step 5: Run the full suite and typecheck**
+- [x] **Step 5: Run the full suite and typecheck**
 
 Run: `npm test && npx tsc`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/serve.ts src/index.ts test/serve.spec.ts test/index.spec.ts
@@ -2007,7 +2007,7 @@ git commit -m "feat: serve Zoom redirect configs per MAC behind fleet, Zoom, pro
   Promise<ConsoleRow[]>`, `renderConsolePage(rows: ConsoleRow[]): string` in `src/console.ts`;
   `GET /admin/console`, `GET /admin/api/requests`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // test/console.spec.ts
@@ -2109,12 +2109,12 @@ describe('/admin/console', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- console.spec.ts index.spec.ts`
 Expected: FAIL — `src/console.ts` missing; routes 404.
 
-- [ ] **Step 3: Write `src/console.ts`**
+- [x] **Step 3: Write `src/console.ts`**
 
 ```ts
 // src/console.ts
@@ -2242,7 +2242,7 @@ ${SCRIPT}
 }
 ```
 
-- [ ] **Step 4: Wire the routes in `src/index.ts`**
+- [x] **Step 4: Wire the routes in `src/index.ts`**
 
 ```ts
 import { listRecentRequests, renderConsolePage } from './console.ts';
@@ -2262,12 +2262,12 @@ const requestsFeed: Handler = async (_request, env, url) => {
   'GET /admin/api/requests': requestsFeed,
 ```
 
-- [ ] **Step 5: Run the full suite and typecheck**
+- [x] **Step 5: Run the full suite and typecheck**
 
 Run: `npm test && npx tsc`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/console.ts src/index.ts test/console.spec.ts test/index.spec.ts
@@ -2288,7 +2288,7 @@ git commit -m "feat: debug console with 2s polling request feed"
   `DashboardHeader { servingEnabled: boolean; lastZoomSyncAt: string | null; zoomDeviceCount: number }`;
   `renderDashboard(rows, filter, header)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `test/db.spec.ts` `listFleet` test, add before `const fleet = await listFleet(env.DB);`:
 
@@ -2331,12 +2331,12 @@ and add:
   });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- db.spec.ts dashboard.spec.ts`
 Expected: FAIL — `inZoom` undefined; renderDashboard ignores the header.
 
-- [ ] **Step 3: Update `listFleet` in `src/db.ts`**
+- [x] **Step 3: Update `listFleet` in `src/db.ts`**
 
 Add to `FleetRow`:
 
@@ -2396,7 +2396,7 @@ export async function listFleet(db: D1Database): Promise<FleetRow[]> {
 }
 ```
 
-- [ ] **Step 4: Update `src/pages/dashboard.ts` and the route**
+- [x] **Step 4: Update `src/pages/dashboard.ts` and the route**
 
 ```ts
 export interface DashboardHeader {
@@ -2436,12 +2436,12 @@ const dashboard: Handler = async (_request, env, url) => {
 };
 ```
 
-- [ ] **Step 5: Run the full suite and typecheck**
+- [x] **Step 5: Run the full suite and typecheck**
 
 Run: `npm test && npx tsc`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/db.ts src/pages/dashboard.ts src/index.ts test/db.spec.ts test/dashboard.spec.ts
@@ -2452,15 +2452,15 @@ git commit -m "feat: fleet view shows Zoom presence, last redirect, and serving 
 
 ### Task 9: Deploy and lab test (manual)
 
-- [ ] **Step 1: Migrate production**
+- [x] **Step 1: Migrate production**
 
 ```bash
 npx wrangler d1 migrations apply phone_provisioning --remote
 ```
 
-- [ ] **Step 2: Deploy** — `npx wrangler deploy`. Confirm the output lists the cron trigger.
+- [x] **Step 2: Deploy** — `npx wrangler deploy`. Confirm the output lists the cron trigger.
 
-- [ ] **Step 3: Verify the kill switch is OFF** — `https://phonehome.cincylab.net/admin/settings`
+- [x] **Step 3: Verify the kill switch is OFF** — `https://phonehome.cincylab.net/admin/settings`
   shows OFF (fresh `settings` table has no row → off). Do not turn it on yet.
 
 - [ ] **Step 4: Zoom** — on `/admin/zoom` confirm credentials are saved, click **Sync now**,
@@ -2502,3 +2502,17 @@ npx wrangler d1 migrations apply phone_provisioning --remote
 - **Test isolation:** every test seeds its own rows; `beforeEach` wipes all app tables
   including `settings`, `zoom_devices`, `provisioning_profiles` (the GLOB filter in
   `test/apply-migrations.ts` already covers new tables).
+
+## Execution Notes (2026-09-17, subagent-driven)
+
+- Tasks 1–8 done and reviewed; final whole-branch review + one fix wave (commit 087bbd9). 117 tests, tsc clean.
+- Task 9 steps 1–3 done: migration 0003 applied to production D1, Worker deployed with the hourly cron,
+  kill switch confirmed OFF on the live host. Steps 4–9 (Zoom sync, profiles, lab phone, DHCP) are yours.
+- Deviations from the plan text, all ruled toward the spec: every `/admin*` response (incl. 401/404/303/400)
+  sends `Cache-Control: no-store`; `redirect()` builds the 303 by hand; `classifyRequest` treats the all-zero
+  MAC as `other`; `loadServeContext` failure degrades to a logged 404 `context-error`; the console guards
+  `JSON.parse` of stored headers; generator throws degrade to 404 `bad-zoom-url`; `isValidZoomUrl` rejects
+  whitespace/control chars; `replaceZoomDevices` uses `INSERT OR REPLACE`; admin is 503 when
+  `ADMIN_PASSWORD` is unset or < 12 chars; admin POSTs require `Sec-Fetch-Site: same-origin` or a matching
+  `Origin` (403 otherwise); `0003` also creates a partial index for the `redirected` CTE.
+- Known deferred minors live in git history of the review ledger (summarised in the session's final message).
