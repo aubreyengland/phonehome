@@ -45,3 +45,77 @@ describe('extractMacAddress', () => {
     expect(extractMacAddress('/unknown.cfg', '')).toBeNull();
   });
 });
+
+import { parseDevice, parseUserAgent } from '../src/parse.ts';
+
+describe('parseUserAgent', () => {
+  it('parses a Yealink User-Agent', () => {
+    expect(parseUserAgent('Yealink SIP-T48U 66.85.0.15')).toEqual({
+      manufacturer: 'Yealink',
+      model: 'SIP-T48U',
+      firmware: '66.85.0.15',
+    });
+  });
+
+  it('parses a Yealink T48S User-Agent that carries the MAC', () => {
+    expect(parseUserAgent('Yealink SIP-T48S 66.86.0.15 80:5e:c0:aa:bb:cc')).toEqual({
+      manufacturer: 'Yealink',
+      model: 'SIP-T48S',
+      firmware: '66.86.0.15',
+    });
+  });
+
+  it('parses a Poly VVX User-Agent (plan placeholder shape)', () => {
+    expect(parseUserAgent('PolycomSoundPointIPPhone/VVX_411-UA/6.4.7.1181')).toEqual({
+      manufacturer: 'Poly',
+      model: 'VVX 411',
+      firmware: '6.4.7.1181',
+    });
+  });
+
+  it('parses a Poly UCS FileTransport User-Agent', () => {
+    expect(parseUserAgent('FileTransport PolycomVVX-VVX_311-UA/5.9.6.2327 Type/Application')).toEqual({
+      manufacturer: 'Poly',
+      model: 'VVX 311',
+      firmware: '5.9.6.2327',
+    });
+  });
+
+  it('returns all nulls for an unrecognized or missing User-Agent', () => {
+    expect(parseUserAgent('Mozilla/5.0 unknown device')).toEqual({
+      manufacturer: null,
+      model: null,
+      firmware: null,
+    });
+    expect(parseUserAgent(null)).toEqual({ manufacturer: null, model: null, firmware: null });
+  });
+});
+
+describe('parseDevice', () => {
+  it('combines MAC extraction and User-Agent parsing', () => {
+    expect(parseDevice('/aabbccddeeff.cfg', '', 'Yealink SIP-T48U 66.85.0.15')).toEqual({
+      manufacturer: 'Yealink',
+      model: 'SIP-T48U',
+      firmware: '66.85.0.15',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+    });
+  });
+
+  it('falls back to the MAC embedded in a Yealink User-Agent', () => {
+    expect(parseDevice('/y000000000028.cfg', '', 'Yealink SIP-T48S 66.86.0.15 80:5e:c0:aa:bb:cc')).toEqual({
+      manufacturer: 'Yealink',
+      model: 'SIP-T48S',
+      firmware: '66.86.0.15',
+      macAddress: '80:5E:C0:AA:BB:CC',
+    });
+  });
+
+  it('prefers the path MAC over the User-Agent MAC', () => {
+    const device = parseDevice('/aabbccddeeff.cfg', '', 'Yealink SIP-T48S 66.86.0.15 80:5e:c0:aa:bb:cc');
+    expect(device.macAddress).toBe('AA:BB:CC:DD:EE:FF');
+  });
+
+  it('returns null MAC when nothing carries one', () => {
+    expect(parseDevice('/000000000000.cfg', '', 'FileTransport PolycomVVX-VVX_411-UA/6.4.7.1181').macAddress).toBeNull();
+  });
+});
