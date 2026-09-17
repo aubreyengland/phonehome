@@ -138,3 +138,57 @@ Once inventory + request-format knowledge exists: decide whether to (a) redirect
 identified phones to Zoom's own provisioning cloud via the Zoom S2S-authenticated Devices
 API, or (b) generate vendor config files directly. That decision explicitly deferred to
 after Phase 1 data is in hand.
+
+## Addendum (2026-09-17): Expected fleet import
+
+RingCentral's device export (`Migrate.xlsx`, sheet `Devices`, columns `Action, Device ID,
+Name, Extension Number, Type, Model, Serial/MAC, Status`) lists the whole fleet expected to
+migrate. Phase 1 imports it so the dashboard can show **seen vs. not-yet-seen vs.
+unexpected** per MAC instead of only what has checked in.
+
+Fleet composition (hard phones with a valid 12-hex MAC in `Serial/MAC`):
+
+| Model                            | Rows | With MAC |
+|----------------------------------|-----:|---------:|
+| Yealink T48S                     |  310 |      308 |
+| Yealink T48U                     |   41 |       41 |
+| Polycom OBi302 (ATA)             |   35 |       35 |
+| Polycom VVX411                   |   26 |       26 |
+| Cisco SPA-122 / 191 ATA          |   34 |        0 |
+| Polycom VVX450                   |    5 |        5 |
+| Polycom IP 5000 / 6000           |    5 |        5 |
+| Polycom VVX311                   |    3 |        3 |
+
+Only `Type = HardPhone` rows with a valid MAC are imported (425). Softphones, paging, and
+Cisco ATAs (serials, not MACs) are skipped. Models outside the Phase 1 target hardware
+(VVX450, conference phones, OBi302) are imported as-is; the dashboard shows the expected
+model so they are easy to filter out later.
+
+### Component 4: fleet seed script
+
+`scripts/build-seed.ts` (run with `node`, no build step) parses the xlsx with `fflate`
+and emits `seed/expected_devices.sql` — one upsert per device. Applied with
+`wrangler d1 execute phone_provisioning --remote --file seed/expected_devices.sql`.
+Parsing lives in `src/fleet.ts` so it is unit-tested like everything else; the script is
+a thin file-IO wrapper. The Worker itself never parses xlsx (free-plan CPU limit).
+
+`Migrate.xlsx` and `seed/` are gitignored — they contain employee names.
+
+### Data model addition
+
+```
+expected_devices
+  mac_address   TEXT PRIMARY KEY   -- normalized AA:BB:CC:DD:EE:FF
+  rc_device_id  TEXT
+  name          TEXT NOT NULL
+  extension     TEXT
+  model         TEXT
+  rc_status     TEXT               -- Online/Offline as exported
+  imported_at   TEXT NOT NULL
+```
+
+### Dashboard change
+
+Device list becomes a fleet view: `expected_devices` LEFT JOIN latest check-in per MAC,
+plus check-ins whose MAC is not in the expected list (`unexpected`). Summary counts
+(expected / seen / not seen / unexpected) at the top; `?status=` query filter.
