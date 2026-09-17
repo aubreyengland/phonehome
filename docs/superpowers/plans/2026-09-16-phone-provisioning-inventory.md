@@ -92,7 +92,7 @@ in context and test in isolation.
   later task.
 - Produces: default-exported Worker object with `fetch(request, env)` in `src/index.ts`.
 
-- [ ] **Step 1: Create `package.json`**
+- [x] **Step 1: Create `package.json`**
 
 ```json
 {
@@ -113,7 +113,7 @@ in context and test in isolation.
 }
 ```
 
-- [ ] **Step 2: Create `tsconfig.json`**
+- [x] **Step 2: Create `tsconfig.json`**
 
 ```json
 {
@@ -132,7 +132,7 @@ in context and test in isolation.
 }
 ```
 
-- [ ] **Step 3: Create `wrangler.toml`**
+- [x] **Step 3: Create `wrangler.toml`**
 
 ```toml
 name = "phone-provisioning-inventory"
@@ -149,7 +149,7 @@ database_id = "REPLACE_WITH_D1_DATABASE_ID"
 `wrangler d1 create phone_provisioning`. Tests don't need a real ID; `vitest-pool-workers`
 runs its own ephemeral D1 instance from this config.
 
-- [ ] **Step 4: Create `migrations/0001_init.sql`**
+- [x] **Step 4: Create `migrations/0001_init.sql`**
 
 ```sql
 CREATE TABLE provisioning_requests (
@@ -181,7 +181,7 @@ CREATE TABLE zoom_s2s_config (
 The `CHECK (id = 1)` constraint keeps `zoom_s2s_config` a single-row table — there's only
 ever one Zoom app configured, so save/load is a plain upsert against `id = 1`.
 
-- [ ] **Step 5: Create `vitest.config.ts`**
+- [x] **Step 5: Create `vitest.config.ts`**
 
 ```ts
 import { defineWorkersConfig, readD1Migrations } from '@cloudflare/vitest-pool-workers/config';
@@ -207,7 +207,7 @@ export default defineWorkersConfig(async () => {
 });
 ```
 
-- [ ] **Step 6: Create `test/apply-migrations.ts`**
+- [x] **Step 6: Create `test/apply-migrations.ts`**
 
 ```ts
 import { applyD1Migrations, env } from 'cloudflare:test';
@@ -219,7 +219,7 @@ This applies `migrations/0001_init.sql` to the ephemeral test D1 instance before
 runs — `migrations/0001_init.sql` stays the single source of truth for schema, used both
 by real deploys (`wrangler d1 migrations apply`) and by tests.
 
-- [ ] **Step 7: Create `src/types.ts`**
+- [x] **Step 7: Create `src/types.ts`**
 
 ```ts
 export interface Env {
@@ -237,7 +237,7 @@ export interface ParsedDevice {
 }
 ```
 
-- [ ] **Step 8: Write the failing smoke test**
+- [x] **Step 8: Write the failing smoke test**
 
 ```ts
 // test/index.spec.ts
@@ -254,12 +254,12 @@ describe('provisioning capture endpoint', () => {
 });
 ```
 
-- [ ] **Step 9: Run test to verify it fails**
+- [x] **Step 9: Run test to verify it fails**
 
 Run: `npm install && npm test`
 Expected: FAIL — `src/index.ts` doesn't exist yet, or has no default export.
 
-- [ ] **Step 10: Write minimal `src/index.ts`**
+- [x] **Step 10: Write minimal `src/index.ts`**
 
 ```ts
 import type { Env } from './types';
@@ -271,12 +271,12 @@ export default {
 };
 ```
 
-- [ ] **Step 11: Run test to verify it passes**
+- [x] **Step 11: Run test to verify it passes**
 
 Run: `npm test`
 Expected: PASS
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add package.json tsconfig.json wrangler.toml vitest.config.ts migrations test/apply-migrations.ts test/index.spec.ts src/types.ts src/index.ts
@@ -296,7 +296,7 @@ git commit -m "chore: scaffold Cloudflare Worker with D1 schema and smoke test"
 - Produces: `extractMacAddress(path: string, query: string): string | null` in
   `src/parse.ts`, used by Task 3's `parseDevice` and Task 5's route wiring.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // test/parse.spec.ts
@@ -324,12 +324,12 @@ describe('extractMacAddress', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- parse.spec.ts`
 Expected: FAIL — `src/parse.ts` doesn't exist yet.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/parse.ts
@@ -358,12 +358,12 @@ export function extractMacAddress(path: string, query: string): string | null {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- parse.spec.ts`
 Expected: PASS (all 4 cases)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/parse.ts test/parse.spec.ts
@@ -392,7 +392,7 @@ placeholder pending Task 13's lab capture — it's written to be easy to adjust 
 place (the two `match()` calls) once real Poly VVX request data exists, without touching
 callers.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // append to test/parse.spec.ts
@@ -445,12 +445,12 @@ describe('parseDevice', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- parse.spec.ts`
 Expected: FAIL — `parseUserAgent` and `parseDevice` don't exist yet.
 
-- [ ] **Step 3: Add the implementation**
+- [x] **Step 3: Add the implementation**
 
 ```ts
 // append to src/parse.ts
@@ -492,12 +492,12 @@ export function parseDevice(path: string, query: string, userAgent: string | nul
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- parse.spec.ts`
 Expected: PASS (all cases)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/parse.ts test/parse.spec.ts
@@ -517,7 +517,7 @@ git commit -m "feat: parse manufacturer/model/firmware from provisioning User-Ag
 - Produces: `RequestLogEntry` type and `insertRequestLog(db: D1Database, entry:
   RequestLogEntry): Promise<void>` in `src/db.ts`, used by Task 5's route wiring.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // test/db.spec.ts
@@ -549,12 +549,12 @@ describe('insertRequestLog', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- db.spec.ts`
 Expected: FAIL — `src/db.ts` doesn't exist yet.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/db.ts
@@ -597,12 +597,12 @@ export async function insertRequestLog(db: D1Database, entry: RequestLogEntry): 
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- db.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/db.ts test/db.spec.ts
@@ -622,7 +622,7 @@ git commit -m "feat: persist provisioning check-ins to D1"
 - Produces: nothing new for later tasks — this is the integration point for the
   provisioning side; Tasks 6–12 build the `/admin` side of `index.ts` separately.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // append to test/index.spec.ts
@@ -650,12 +650,12 @@ it('logs a parsed Yealink check-in to D1', async () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- index.spec.ts`
 Expected: FAIL — no row is inserted yet, `src/index.ts` is still the Task 1 stub.
 
-- [ ] **Step 3: Update `src/index.ts`**
+- [x] **Step 3: Update `src/index.ts`**
 
 ```ts
 import type { Env } from './types';
@@ -687,12 +687,12 @@ export default {
 };
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- index.spec.ts`
 Expected: PASS — both the Task 1 smoke test and this new test pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/index.ts test/index.spec.ts
@@ -713,7 +713,7 @@ git commit -m "feat: wire parsing and logging into the provisioning fetch handle
   string): boolean` and `unauthorizedResponse(): Response` in `src/auth.ts`, used by
   Task 9's `/admin` route wiring.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // test/auth.spec.ts
@@ -761,12 +761,12 @@ describe('unauthorizedResponse', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- auth.spec.ts`
 Expected: FAIL — `src/auth.ts` doesn't exist yet.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/auth.ts
@@ -801,12 +801,12 @@ export function unauthorizedResponse(): Response {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- auth.spec.ts`
 Expected: PASS (all 5 cases)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auth.ts test/auth.spec.ts
@@ -827,7 +827,7 @@ git commit -m "feat: add Basic Auth check for admin routes"
   Promise<DeviceSummary[]>` in `src/db.ts`, used by Task 8's `renderDashboard` and
   Task 9's route wiring.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // append to test/db.spec.ts
@@ -887,12 +887,12 @@ describe('listDevices', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- db.spec.ts`
 Expected: FAIL — `listDevices` doesn't exist yet.
 
-- [ ] **Step 3: Add the implementation**
+- [x] **Step 3: Add the implementation**
 
 ```ts
 // append to src/db.ts
@@ -926,12 +926,12 @@ export async function listDevices(db: D1Database): Promise<DeviceSummary[]> {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- db.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/db.ts test/db.spec.ts
@@ -951,7 +951,7 @@ git commit -m "feat: query latest-per-device inventory with check-in counts"
 - Produces: `renderDashboard(devices: DeviceSummary[]): string` in `src/dashboard.ts`,
   used by Task 9's route wiring.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // test/dashboard.spec.ts
@@ -997,12 +997,12 @@ describe('renderDashboard', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- dashboard.spec.ts`
 Expected: FAIL — `src/dashboard.ts` doesn't exist yet.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/dashboard.ts
@@ -1056,12 +1056,12 @@ export function renderDashboard(devices: DeviceSummary[]): string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- dashboard.spec.ts`
 Expected: PASS (all 3 cases)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/dashboard.ts test/dashboard.spec.ts
@@ -1082,7 +1082,7 @@ git commit -m "feat: render admin dashboard HTML with device table and settings 
 - Produces: nothing new for later tasks — Task 12 adds the settings `POST` branch
   alongside this.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // append to test/index.spec.ts
@@ -1103,14 +1103,14 @@ describe('/admin', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- index.spec.ts`
 Expected: FAIL — `/admin` currently falls through to the provisioning-capture branch and
 returns an empty `200`, not the dashboard; also `env.ADMIN_USER`/`ADMIN_PASSWORD` aren't
 set for tests yet.
 
-- [ ] **Step 3: Add test env vars to `wrangler.toml`**
+- [x] **Step 3: Add test env vars to `wrangler.toml`**
 
 ```toml
 [vars]
@@ -1123,7 +1123,7 @@ deploy — plaintext in `wrangler.toml` is only acceptable here because this who
 about to be superseded for the real credential at deploy time. `ENCRYPTION_KEY`, added in
 Task 10, is a `wrangler secret` from the start since it protects the Zoom client secret.)
 
-- [ ] **Step 4: Update `src/index.ts`**
+- [x] **Step 4: Update `src/index.ts`**
 
 ```ts
 import type { Env } from './types';
@@ -1168,12 +1168,12 @@ export default {
 };
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `npm test -- index.spec.ts`
 Expected: PASS — all `/admin` and provisioning-capture tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add wrangler.toml src/index.ts test/index.spec.ts
@@ -1194,7 +1194,7 @@ git commit -m "feat: wire Basic-Auth-protected /admin dashboard route"
   `decryptSecret(encoded: string, base64Key: string): Promise<string>` in `src/crypto.ts`,
   used by Task 12's route wiring.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // test/crypto.spec.ts
@@ -1219,12 +1219,12 @@ describe('encryptSecret / decryptSecret', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- crypto.spec.ts`
 Expected: FAIL — `src/crypto.ts` doesn't exist yet.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/crypto.ts
@@ -1255,12 +1255,12 @@ export async function decryptSecret(encoded: string, base64Key: string): Promise
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- crypto.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/crypto.ts test/crypto.spec.ts
@@ -1282,7 +1282,7 @@ git commit -m "feat: AES-GCM encrypt/decrypt helpers for the Zoom client secret"
   ZoomConfigRecord): Promise<void>`, `getZoomConfig(db: D1Database):
   Promise<ZoomConfigRecord | null>` in `src/db.ts`, used by Task 12's route wiring.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```ts
 // append to test/db.spec.ts
@@ -1333,12 +1333,12 @@ describe('saveZoomConfig / getZoomConfig', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- db.spec.ts`
 Expected: FAIL — `saveZoomConfig`/`getZoomConfig` don't exist yet.
 
-- [ ] **Step 3: Add the implementation**
+- [x] **Step 3: Add the implementation**
 
 ```ts
 // append to src/db.ts
@@ -1376,12 +1376,12 @@ export async function getZoomConfig(db: D1Database): Promise<ZoomConfigRecord | 
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- db.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/db.ts test/db.spec.ts
@@ -1406,7 +1406,7 @@ previously saved secret back in HTML, even encrypted-then-redisplayed-as-masked.
 always overwrites. This is deliberate: no reason to round-trip a secret through the
 browser once it's stored.
 
-- [ ] **Step 1: Add `ENCRYPTION_KEY` as a bindings var for tests**
+- [x] **Step 1: Add `ENCRYPTION_KEY` as a bindings var for tests**
 
 Add to `wrangler.toml`'s `[vars]` block from Task 9:
 
@@ -1419,7 +1419,7 @@ ENCRYPTION_KEY = "l7GJ2Q6f1n9mYkX3wZ4pC8dT5rV0sB1eH2iJ6kL9mN0="
 
 (Task 13 moves this to a real `wrangler secret put ENCRYPTION_KEY` for the actual deploy.)
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```ts
 // append to test/index.spec.ts
@@ -1462,13 +1462,13 @@ describe('/admin/settings', () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `npm test -- index.spec.ts`
 Expected: FAIL — `/admin/settings` isn't routed yet, falls through to the provisioning
 branch.
 
-- [ ] **Step 4: Update `src/index.ts`**
+- [x] **Step 4: Update `src/index.ts`**
 
 ```ts
 import type { Env } from './types';
@@ -1531,12 +1531,12 @@ export default {
 };
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `npm test`
 Expected: PASS — full suite green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add wrangler.toml src/index.ts test/index.spec.ts
@@ -1566,7 +1566,7 @@ per-request CPU budget is too small for inflating and scanning a 400 KB sheet. `
 is pure (no `node:` imports) so it runs under both vitest-pool-workers and plain
 `node scripts/build-seed.ts` (Node's built-in type stripping; `.ts` extensions on imports).
 
-- [ ] **Step 1: Create `migrations/0002_expected_devices.sql`**
+- [x] **Step 1: Create `migrations/0002_expected_devices.sql`**
 
 ```sql
 CREATE TABLE expected_devices (
@@ -1580,7 +1580,7 @@ CREATE TABLE expected_devices (
 );
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `test/fleet.spec.ts` builds a tiny xlsx in memory with `fflate.zipSync` (one sheet, both
 inline-string and shared-string cells) and asserts:
@@ -1590,9 +1590,9 @@ inline-string and shared-string cells) and asserts:
 - `buildSeedSql` emits one `INSERT ... ON CONFLICT(mac_address) DO UPDATE` per device and
   doubles single quotes in names.
 
-- [ ] **Step 3: Run tests to verify they fail** — `npm test -- fleet.spec.ts`
+- [x] **Step 3: Run tests to verify they fail** — `npm test -- fleet.spec.ts`
 
-- [ ] **Step 4: Implement `src/fleet.ts` and `scripts/build-seed.ts`**
+- [x] **Step 4: Implement `src/fleet.ts` and `scripts/build-seed.ts`**
 
 `parseMigrateWorkbook`: `unzipSync` → read `xl/sharedStrings.xml` (optional) and
 `xl/worksheets/sheet1.xml` → regex over `<row>`/`<c>` → header row maps column letter to
@@ -1600,10 +1600,10 @@ header text → filter `Type === 'HardPhone'` and `normalizeMac(serial) !== null
 
 `scripts/build-seed.ts`: `node scripts/build-seed.ts [Migrate.xlsx] [seed/expected_devices.sql]`.
 
-- [ ] **Step 5: Run tests to verify they pass**, then `npm run seed` against the real
+- [x] **Step 5: Run tests to verify they pass**, then `npm run seed` against the real
   `Migrate.xlsx` and confirm it reports 423 devices.
 
-- [ ] **Step 6: Commit** — `feat: import expected fleet from RingCentral xlsx export`
+- [x] **Step 6: Commit** — `feat: import expected fleet from RingCentral xlsx export`
 
 ---
 
@@ -1620,7 +1620,7 @@ header text → filter `Type === 'HardPhone'` and `normalizeMac(serial) !== null
   `listFleet(db): Promise<FleetRow[]>` in `src/db.ts`;
   `renderDashboard(rows: FleetRow[], filter: FleetStatus | 'all'): string`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 - `listFleet`: seed two expected devices + check-ins for one of them + one check-in for an
   unknown MAC → three rows with statuses `seen`, `not-seen`, `unexpected`; seen row carries
@@ -1629,18 +1629,18 @@ header text → filter `Type === 'HardPhone'` and `normalizeMac(serial) !== null
   expected name/extension/model columns, status filter hides non-matching rows, HTML escaping.
 - `/admin?status=unexpected` route passes the filter through.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `listFleet` SQL: CTE `latest` (same window query as Task 7) → `expected_devices LEFT JOIN
 latest` with `CASE` status, `UNION ALL` `latest LEFT JOIN expected_devices WHERE
 e.mac_address IS NULL` as `unexpected`, `ORDER BY lastSeenAt DESC NULLS LAST, expectedName`.
 Dashboard computes counts from the full row set, then filters for display.
 
-- [ ] **Step 4: Run full suite** — `npm test`
+- [x] **Step 4: Run full suite** — `npm test`
 
-- [ ] **Step 5: Commit** — `feat: fleet view with expected/seen/unexpected status`
+- [x] **Step 5: Commit** — `feat: fleet view with expected/seen/unexpected status`
 
 ---
 
@@ -1732,3 +1732,17 @@ string, then re-run `npm test` and re-deploy (Step 4).
 - **Type consistency checked:** `RequestLogEntry`, `DeviceSummary`, `ZoomConfigRecord`,
   and `Env` are defined once each (Tasks 1, 4, 7, 11) and referenced with the same field
   names everywhere they're consumed (Tasks 5, 8, 9, 12).
+
+## Execution Notes (2026-09-17)
+
+- Tasks 1–14 done; Task 15 (deploy + lab test) is manual and still open.
+- Deps updated to current: wrangler 4.134, vitest 4.1, `@cloudflare/vitest-pool-workers` 0.22,
+  workers-types 5.x, TypeScript 7.0. Config uses the v4 plugin API (`cloudflareTest` in
+  `plugins`, not `defineWorkersConfig`). Pool has no per-test storage isolation any more —
+  `test/apply-migrations.ts` wipes app tables in `beforeEach`.
+- Task 7 (`listDevices`) was folded into Task 14's `listFleet`; no standalone device-list query exists.
+- Test-only `ADMIN_PASSWORD`/`ENCRYPTION_KEY` live in `vitest.config.ts` miniflare bindings,
+  not `wrangler.toml` `[vars]`, so nothing needs removing before deploy. Local dev reads `.dev.vars`.
+- MAC extraction also handles Poly `{mac}-phone.cfg` suffixes, ignores Poly's `000000000000.cfg`
+  master file, and falls back to the MAC Yealink embeds in its User-Agent.
+- Compatibility date pinned to 2026-08-22 (newest the bundled workerd supports).
