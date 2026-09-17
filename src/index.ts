@@ -31,6 +31,9 @@ async function captureProvisioningRequest(request: Request, env: Env, url: URL):
       queryString: url.search,
       userAgent,
       headersJson: JSON.stringify(Object.fromEntries(request.headers)),
+      responseStatus: 200,
+      responseKind: 'accepted',
+      responseReason: 'phase1-inert',
     });
   } catch (error) {
     // Never let a logging failure change what the phone sees.

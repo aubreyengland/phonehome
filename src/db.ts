@@ -1,3 +1,5 @@
+export type ResponseKind = 'redirect' | 'not_found' | 'accepted';
+
 export interface RequestLogEntry {
   receivedAt: string;
   sourceIp: string | null;
@@ -10,6 +12,9 @@ export interface RequestLogEntry {
   queryString: string;
   userAgent: string | null;
   headersJson: string;
+  responseStatus: number;
+  responseKind: ResponseKind;
+  responseReason: string | null;
 }
 
 export async function insertRequestLog(db: D1Database, entry: RequestLogEntry): Promise<void> {
@@ -17,8 +22,9 @@ export async function insertRequestLog(db: D1Database, entry: RequestLogEntry): 
     .prepare(
       `INSERT INTO provisioning_requests
         (received_at, source_ip, manufacturer, model, firmware, mac_address,
-         http_method, path, query_string, user_agent, headers_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         http_method, path, query_string, user_agent, headers_json,
+         response_status, response_kind, response_reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       entry.receivedAt,
@@ -32,6 +38,9 @@ export async function insertRequestLog(db: D1Database, entry: RequestLogEntry): 
       entry.queryString,
       entry.userAgent,
       entry.headersJson,
+      entry.responseStatus,
+      entry.responseKind,
+      entry.responseReason,
     )
     .run();
 }
@@ -127,4 +136,29 @@ export async function listFleet(db: D1Database): Promise<FleetRow[]> {
     )
     .all<FleetRow>();
   return result.results;
+}
+
+export const SETTING = {
+  servingEnabled: 'serving_enabled',
+  lastZoomSyncAt: 'last_zoom_sync_at',
+  lastZoomSyncResult: 'last_zoom_sync_result',
+} as const;
+
+export type SettingKey = (typeof SETTING)[keyof typeof SETTING];
+
+export async function getSetting(db: D1Database, key: SettingKey): Promise<string | null> {
+  const row = await db.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first<{ value: string }>();
+  return row?.value ?? null;
+}
+
+export async function setSetting(db: D1Database, key: SettingKey, value: string): Promise<void> {
+  await db
+    .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .bind(key, value)
+    .run();
+}
+
+/** The kill switch. Missing or anything but '1' means off. */
+export async function isServingEnabled(db: D1Database): Promise<boolean> {
+  return (await getSetting(db, SETTING.servingEnabled)) === '1';
 }

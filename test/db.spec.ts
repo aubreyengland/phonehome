@@ -16,6 +16,9 @@ describe('insertRequestLog', () => {
       queryString: '',
       userAgent: 'Yealink SIP-T48U 66.85.0.15',
       headersJson: '{"user-agent":"Yealink SIP-T48U 66.85.0.15"}',
+      responseStatus: 200,
+      responseKind: 'accepted',
+      responseReason: null,
     });
 
     const row = await env.DB.prepare('SELECT * FROM provisioning_requests').first();
@@ -87,6 +90,9 @@ function checkIn(macAddress: string, receivedAt: string, firmware: string, sourc
     queryString: '',
     userAgent: `Yealink SIP-T48S ${firmware}`,
     headersJson: '{}',
+    responseStatus: 200,
+    responseKind: 'accepted',
+    responseReason: null,
   });
 }
 
@@ -155,7 +161,57 @@ describe('listFleet', () => {
       queryString: '',
       userAgent: null,
       headersJson: '{}',
+      responseStatus: 200,
+      responseKind: 'accepted',
+      responseReason: null,
     });
     expect(await listFleet(env.DB)).toEqual([]);
+  });
+});
+
+import { SETTING, getSetting, isServingEnabled, setSetting } from '../src/db.ts';
+
+describe('insertRequestLog response columns', () => {
+  it('persists status, kind, and reason', async () => {
+    await insertRequestLog(env.DB, {
+      receivedAt: '2026-09-17T00:00:00.000Z',
+      sourceIp: null,
+      manufacturer: null,
+      model: null,
+      firmware: null,
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      httpMethod: 'GET',
+      path: '/aabbccddeeff.cfg',
+      queryString: '',
+      userAgent: null,
+      headersJson: '{}',
+      responseStatus: 404,
+      responseKind: 'not_found',
+      responseReason: 'not-in-zoom',
+    });
+    const row = await env.DB.prepare('SELECT response_status, response_kind, response_reason FROM provisioning_requests').first();
+    expect(row).toEqual({ response_status: 404, response_kind: 'not_found', response_reason: 'not-in-zoom' });
+  });
+});
+
+describe('settings', () => {
+  it('returns null for an unset key', async () => {
+    expect(await getSetting(env.DB, SETTING.servingEnabled)).toBeNull();
+  });
+
+  it('sets, reads, and overwrites a key', async () => {
+    await setSetting(env.DB, SETTING.lastZoomSyncResult, 'ok: 3 devices');
+    await setSetting(env.DB, SETTING.lastZoomSyncResult, 'error: boom');
+    expect(await getSetting(env.DB, SETTING.lastZoomSyncResult)).toBe('error: boom');
+    const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM settings').first<{ n: number }>();
+    expect(count?.n).toBe(1);
+  });
+
+  it('isServingEnabled is false unless the value is exactly "1"', async () => {
+    expect(await isServingEnabled(env.DB)).toBe(false);
+    await setSetting(env.DB, SETTING.servingEnabled, '0');
+    expect(await isServingEnabled(env.DB)).toBe(false);
+    await setSetting(env.DB, SETTING.servingEnabled, '1');
+    expect(await isServingEnabled(env.DB)).toBe(true);
   });
 });
