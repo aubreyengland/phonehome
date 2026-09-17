@@ -44,6 +44,9 @@ wrangler.toml
 vitest.config.ts
 migrations/
   0001_init.sql
+  0002_expected_devices.sql
+scripts/
+  build-seed.ts             # node script: Migrate.xlsx -> seed/expected_devices.sql (gitignored)
 test/
   apply-migrations.ts       # global setup: applies migrations/ to the test D1 instance
   parse.spec.ts
@@ -51,11 +54,13 @@ test/
   crypto.spec.ts
   auth.spec.ts
   dashboard.spec.ts
+  fleet.spec.ts
   index.spec.ts
 src/
   types.ts                  # Env interface, ParsedDevice type
   parse.ts                  # extractMacAddress, parseUserAgent, parseDevice
-  db.ts                      # all D1 queries: request log, device list, zoom config
+  db.ts                      # all D1 queries: request log, fleet view, zoom config
+  fleet.ts                   # xlsx -> ExpectedDevice[] parser + seed SQL builder (pure, no node:)
   crypto.ts                  # AES-GCM encrypt/decrypt for the Zoom client secret
   auth.ts                    # Basic Auth check + 401 response helper
   dashboard.ts               # HTML rendering for the admin page
@@ -1540,7 +1545,106 @@ git commit -m "feat: wire /admin/settings to encrypt and save Zoom S2S credentia
 
 ---
 
-### Task 13: Deploy and run the lab test (manual — not code)
+### Task 13: Expected fleet import (xlsx → seed SQL)
+
+**Files:**
+- Create: `migrations/0002_expected_devices.sql`
+- Create: `src/fleet.ts`
+- Create: `scripts/build-seed.ts`
+- Create: `.gitignore` (add `Migrate.xlsx`, `seed/`)
+- Modify: `package.json` (add `fflate` dev dependency, `seed` script)
+- Test: `test/fleet.spec.ts`
+
+**Interfaces:**
+- Consumes: `normalizeMac` (Task 2).
+- Produces: `ExpectedDevice` type, `parseMigrateWorkbook(bytes: Uint8Array):
+  ExpectedDevice[]`, `buildSeedSql(devices: ExpectedDevice[], importedAt: string): string`
+  in `src/fleet.ts`; `expected_devices` table used by Task 14.
+
+Design note: the xlsx is parsed by a Node script, never by the Worker — the free plan's
+per-request CPU budget is too small for inflating and scanning a 400 KB sheet. `src/fleet.ts`
+is pure (no `node:` imports) so it runs under both vitest-pool-workers and plain
+`node scripts/build-seed.ts` (Node's built-in type stripping; `.ts` extensions on imports).
+
+- [ ] **Step 1: Create `migrations/0002_expected_devices.sql`**
+
+```sql
+CREATE TABLE expected_devices (
+  mac_address TEXT PRIMARY KEY,
+  rc_device_id TEXT,
+  name TEXT NOT NULL,
+  extension TEXT,
+  model TEXT,
+  rc_status TEXT,
+  imported_at TEXT NOT NULL
+);
+```
+
+- [ ] **Step 2: Write the failing tests**
+
+`test/fleet.spec.ts` builds a tiny xlsx in memory with `fflate.zipSync` (one sheet, both
+inline-string and shared-string cells) and asserts:
+- hard phones with a 12-hex `Serial/MAC` come back with normalized `AA:BB:..` MACs and all
+  columns mapped;
+- `SoftPhone` rows and hard phones with non-MAC serials (`CCQ224502A7`) are skipped;
+- `buildSeedSql` emits one `INSERT ... ON CONFLICT(mac_address) DO UPDATE` per device and
+  doubles single quotes in names.
+
+- [ ] **Step 3: Run tests to verify they fail** — `npm test -- fleet.spec.ts`
+
+- [ ] **Step 4: Implement `src/fleet.ts` and `scripts/build-seed.ts`**
+
+`parseMigrateWorkbook`: `unzipSync` → read `xl/sharedStrings.xml` (optional) and
+`xl/worksheets/sheet1.xml` → regex over `<row>`/`<c>` → header row maps column letter to
+header text → filter `Type === 'HardPhone'` and `normalizeMac(serial) !== null`.
+
+`scripts/build-seed.ts`: `node scripts/build-seed.ts [Migrate.xlsx] [seed/expected_devices.sql]`.
+
+- [ ] **Step 5: Run tests to verify they pass**, then `npm run seed` against the real
+  `Migrate.xlsx` and confirm it reports 425 devices.
+
+- [ ] **Step 6: Commit** — `feat: import expected fleet from RingCentral xlsx export`
+
+---
+
+### Task 14: Fleet view (expected vs seen) on the dashboard
+
+**Files:**
+- Modify: `src/db.ts` (replace `listDevices`/`DeviceSummary` with `listFleet`/`FleetRow`)
+- Modify: `src/dashboard.ts`, `src/index.ts`
+- Modify: `test/db.spec.ts`, `test/dashboard.spec.ts`, `test/index.spec.ts`
+
+**Interfaces:**
+- Consumes: `insertRequestLog` (Task 4), `expected_devices` (Task 13).
+- Produces: `FleetStatus = 'seen' | 'not-seen' | 'unexpected'`, `FleetRow`,
+  `listFleet(db): Promise<FleetRow[]>` in `src/db.ts`;
+  `renderDashboard(rows: FleetRow[], filter: FleetStatus | 'all'): string`.
+
+- [ ] **Step 1: Write the failing tests**
+
+- `listFleet`: seed two expected devices + check-ins for one of them + one check-in for an
+  unknown MAC → three rows with statuses `seen`, `not-seen`, `unexpected`; seen row carries
+  latest firmware and `checkInCount`; `not-seen` has `checkInCount: 0`.
+- `renderDashboard`: summary counts (`Expected 2`, `Seen 1`, `Not seen 1`, `Unexpected 1`),
+  expected name/extension/model columns, status filter hides non-matching rows, HTML escaping.
+- `/admin?status=unexpected` route passes the filter through.
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+- [ ] **Step 3: Implement**
+
+`listFleet` SQL: CTE `latest` (same window query as Task 7) → `expected_devices LEFT JOIN
+latest` with `CASE` status, `UNION ALL` `latest LEFT JOIN expected_devices WHERE
+e.mac_address IS NULL` as `unexpected`, `ORDER BY lastSeenAt DESC NULLS LAST, expectedName`.
+Dashboard computes counts from the full row set, then filters for display.
+
+- [ ] **Step 4: Run full suite** — `npm test`
+
+- [ ] **Step 5: Commit** — `feat: fleet view with expected/seen/unexpected status`
+
+---
+
+### Task 15: Deploy and run the lab test (manual — not code)
 
 This task has no automated test cycle — it's the physical/manual verification the spec's
 Testing plan calls for. Follow it in order; each step depends on the previous one.
@@ -1554,6 +1658,15 @@ Copy the `database_id` from the output into `wrangler.toml`, replacing
 - [ ] **Step 2: Apply the schema to the real database**
 
 Run: `npx wrangler d1 migrations apply phone_provisioning --remote`
+
+- [ ] **Step 2b: Seed the expected fleet**
+
+```bash
+npm run seed -- Migrate.xlsx
+npx wrangler d1 execute phone_provisioning --remote --file seed/expected_devices.sql
+```
+
+Re-run both whenever RingCentral exports a fresh `Migrate.xlsx` — the seed is an upsert.
 
 - [ ] **Step 3: Set real secrets**
 
