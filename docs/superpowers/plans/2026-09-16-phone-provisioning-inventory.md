@@ -1601,7 +1601,7 @@ header text → filter `Type === 'HardPhone'` and `normalizeMac(serial) !== null
 `scripts/build-seed.ts`: `node scripts/build-seed.ts [Migrate.xlsx] [seed/expected_devices.sql]`.
 
 - [ ] **Step 5: Run tests to verify they pass**, then `npm run seed` against the real
-  `Migrate.xlsx` and confirm it reports 425 devices.
+  `Migrate.xlsx` and confirm it reports 423 devices.
 
 - [ ] **Step 6: Commit** — `feat: import expected fleet from RingCentral xlsx export`
 

@@ -159,7 +159,7 @@ Fleet composition (hard phones with a valid 12-hex MAC in `Serial/MAC`):
 | Polycom IP 5000 / 6000           |    5 |        5 |
 | Polycom VVX311                   |    3 |        3 |
 
-Only `Type = HardPhone` rows with a valid MAC are imported (425). Softphones, paging, and
+Only `Type = HardPhone` rows with a valid MAC are imported (423). Softphones, paging, and
 Cisco ATAs (serials, not MACs) are skipped. Models outside the Phase 1 target hardware
 (VVX450, conference phones, OBi302) are imported as-is; the dashboard shows the expected
 model so they are easy to filter out later.
