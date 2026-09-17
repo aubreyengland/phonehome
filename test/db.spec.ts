@@ -70,3 +70,92 @@ describe('saveZoomConfig / getZoomConfig', () => {
     expect(count?.n).toBe(1);
   });
 });
+
+import { listFleet, type FleetRow } from '../src/db.ts';
+import { buildSeedSql } from '../src/fleet.ts';
+
+function checkIn(macAddress: string, receivedAt: string, firmware: string, sourceIp = '203.0.113.5') {
+  return insertRequestLog(env.DB, {
+    receivedAt,
+    sourceIp,
+    manufacturer: 'Yealink',
+    model: 'SIP-T48S',
+    firmware,
+    macAddress,
+    httpMethod: 'GET',
+    path: `/${macAddress.replace(/:/g, '').toLowerCase()}.cfg`,
+    queryString: '',
+    userAgent: `Yealink SIP-T48S ${firmware}`,
+    headersJson: '{}',
+  });
+}
+
+describe('listFleet', () => {
+  it('joins expected devices with latest check-ins and flags unexpected MACs', async () => {
+    await env.DB.exec(
+      buildSeedSql(
+        [
+          { macAddress: '80:5E:C0:00:00:01', rcDeviceId: '1', name: 'Seen Phone', extension: '2001', model: 'Yealink T48S', rcStatus: 'Online' },
+          { macAddress: '80:5E:C0:00:00:02', rcDeviceId: '2', name: 'Quiet Phone', extension: null, model: 'Polycom VVX411', rcStatus: 'Offline' },
+        ],
+        '2026-09-17T00:00:00.000Z',
+      ),
+    );
+    await checkIn('80:5E:C0:00:00:01', '2026-09-17T01:00:00.000Z', '66.86.0.14');
+    await checkIn('80:5E:C0:00:00:01', '2026-09-17T02:00:00.000Z', '66.86.0.15', '203.0.113.9');
+    await checkIn('AA:AA:AA:00:00:03', '2026-09-17T01:30:00.000Z', '1.0.0.0');
+
+    const fleet = await listFleet(env.DB);
+    const byMac = Object.fromEntries(fleet.map((r) => [r.macAddress, r]));
+
+    expect(fleet.map((r) => r.status)).toEqual(['seen', 'unexpected', 'not-seen']);
+
+    expect(byMac['80:5E:C0:00:00:01']).toEqual<FleetRow>({
+      macAddress: '80:5E:C0:00:00:01',
+      status: 'seen',
+      expectedName: 'Seen Phone',
+      expectedExtension: '2001',
+      expectedModel: 'Yealink T48S',
+      rcStatus: 'Online',
+      manufacturer: 'Yealink',
+      model: 'SIP-T48S',
+      firmware: '66.86.0.15',
+      sourceIp: '203.0.113.9',
+      lastSeenAt: '2026-09-17T02:00:00.000Z',
+      checkInCount: 2,
+    });
+
+    expect(byMac['80:5E:C0:00:00:02']).toMatchObject({
+      status: 'not-seen',
+      expectedName: 'Quiet Phone',
+      expectedExtension: null,
+      firmware: null,
+      lastSeenAt: null,
+      checkInCount: 0,
+    });
+
+    expect(byMac['AA:AA:AA:00:00:03']).toMatchObject({
+      status: 'unexpected',
+      expectedName: null,
+      firmware: '1.0.0.0',
+      checkInCount: 1,
+    });
+  });
+
+  it('ignores check-ins that carried no MAC', async () => {
+    await insertRequestLog(env.DB, {
+      receivedAt: '2026-09-17T01:00:00.000Z',
+      sourceIp: null,
+      manufacturer: null,
+      model: null,
+      firmware: null,
+      macAddress: null,
+      httpMethod: 'GET',
+      path: '/y000000000028.cfg',
+      queryString: '',
+      userAgent: null,
+      headersJson: '{}',
+    });
+    expect(await listFleet(env.DB)).toEqual([]);
+  });
+});
