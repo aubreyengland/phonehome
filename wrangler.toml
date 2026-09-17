@@ -6,3 +6,7 @@ compatibility_date = "2026-08-22"
 binding = "DB"
 database_name = "phone_provisioning"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[vars]
+ADMIN_USER = "admin"
+# ADMIN_PASSWORD and ENCRYPTION_KEY are secrets: `wrangler secret put <NAME>` (never in this file).

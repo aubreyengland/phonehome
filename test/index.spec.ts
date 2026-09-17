@@ -51,3 +51,102 @@ describe('provisioning capture logging', () => {
     expect(row?.source_ip).toBe('198.51.100.7');
   });
 });
+
+import { decryptSecret } from '../src/crypto.ts';
+import { getZoomConfig } from '../src/db.ts';
+import { buildSeedSql } from '../src/fleet.ts';
+
+const AUTH = { Authorization: `Basic ${btoa('admin:secret')}` };
+
+describe('/admin', () => {
+  it('rejects requests without valid Basic Auth', async () => {
+    const response = await SELF.fetch('https://example.com/admin');
+    expect(response.status).toBe(401);
+    expect(response.headers.get('WWW-Authenticate')).toContain('Basic');
+  });
+
+  it('does not log admin requests as provisioning check-ins', async () => {
+    await SELF.fetch('https://example.com/admin');
+    await SELF.fetch('https://example.com/admin', { headers: AUTH });
+    const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM provisioning_requests').first<{ n: number }>();
+    expect(count?.n).toBe(0);
+  });
+
+  it('renders the fleet dashboard for authenticated requests', async () => {
+    await env.DB.exec(
+      buildSeedSql(
+        [{ macAddress: '80:5E:C0:00:00:02', rcDeviceId: '2', name: 'Quiet Phone', extension: null, model: 'Polycom VVX411', rcStatus: 'Offline' }],
+        '2026-09-17T00:00:00.000Z',
+      ),
+    );
+    await SELF.fetch('https://example.com/aabbccddeeff.cfg', { headers: { 'User-Agent': 'Yealink SIP-T48U 66.85.0.15' } });
+
+    const response = await SELF.fetch('https://example.com/admin', { headers: AUTH });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toContain('text/html');
+    const html = await response.text();
+    expect(html).toContain('Provisioning Inventory');
+    expect(html).toContain('Quiet Phone');
+    expect(html).toContain('AA:BB:CC:DD:EE:FF');
+  });
+
+  it('applies the ?status= filter', async () => {
+    await env.DB.exec(
+      buildSeedSql(
+        [{ macAddress: '80:5E:C0:00:00:02', rcDeviceId: '2', name: 'Quiet Phone', extension: null, model: 'Polycom VVX411', rcStatus: 'Offline' }],
+        '2026-09-17T00:00:00.000Z',
+      ),
+    );
+    await SELF.fetch('https://example.com/aabbccddeeff.cfg', { headers: { 'User-Agent': 'Yealink SIP-T48U 66.85.0.15' } });
+
+    const html = await (await SELF.fetch('https://example.com/admin?status=unexpected', { headers: AUTH })).text();
+    expect(html).toContain('AA:BB:CC:DD:EE:FF');
+    expect(html).not.toContain('Quiet Phone');
+  });
+});
+
+describe('/admin/settings', () => {
+  it('rejects unauthenticated POSTs', async () => {
+    const response = await SELF.fetch('https://example.com/admin/settings', { method: 'POST' });
+    expect(response.status).toBe(401);
+  });
+
+  it('saves the encrypted client secret and redirects back to /admin', async () => {
+    const form = new URLSearchParams({
+      clientId: 'client-123',
+      clientSecret: 'super-secret-value',
+      accountId: 'account-456',
+    });
+
+    const response = await SELF.fetch('https://example.com/admin/settings', {
+      method: 'POST',
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+      redirect: 'manual',
+    });
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('Location')).toBe('https://example.com/admin');
+
+    const config = await getZoomConfig(env.DB);
+    expect(config?.clientId).toBe('client-123');
+    expect(config?.accountId).toBe('account-456');
+    expect(config?.clientSecretEncrypted).not.toContain('super-secret-value');
+    expect(await decryptSecret(config!.clientSecretEncrypted, env.ENCRYPTION_KEY)).toBe('super-secret-value');
+  });
+
+  it('rejects a submission with a missing field', async () => {
+    const response = await SELF.fetch('https://example.com/admin/settings', {
+      method: 'POST',
+      headers: { ...AUTH, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ clientId: 'x', accountId: 'y' }).toString(),
+    });
+    expect(response.status).toBe(400);
+    expect(await getZoomConfig(env.DB)).toBeNull();
+  });
+
+  it('returns 405 for non-POST methods', async () => {
+    const response = await SELF.fetch('https://example.com/admin/settings', { headers: AUTH });
+    expect(response.status).toBe(405);
+  });
+});
