@@ -113,7 +113,7 @@ Both generators are pure functions of the Zoom URL and are covered by unit tests
 | `src/serve.ts` | `classifyRequest`, `loadServeContext`, `decideResponse`. The whole "should this phone be redirected" logic; pure where possible. |
 | `src/config/yealink.ts`, `src/config/poly.ts` | Config-file generators. |
 | `src/parse.ts` | MAC normalisation (`AA:BB:CC:DD:EE:FF`), MAC extraction from path/query/UA, User-Agent → manufacturer/model/firmware for Yealink and Poly. |
-| `src/db.ts` | Request-log insert, Zoom credential record, fleet query (`listFleet`), `settings` key/value helpers, `SETTING` key constants, kill-switch read. |
+| `src/db.ts` | Request-log insert, Zoom credential record, fleet query (`listFleet`), `settings` key/value helpers, `SETTING` key constants, kill-switch read. The fleet query filters out browser and command-line clients by User-Agent (`NON_PHONE_USER_AGENTS`) so a hand-typed config URL never counts as a check-in. |
 | `src/zoom.ts` | Zoom Server-to-Server OAuth token exchange, paginated `/phone/devices` fetch (assigned + unassigned), row mapping, mirror replace, `syncZoomDevices` (never throws; records outcome in settings). |
 | `src/profiles.ts` | Per-model provisioning profiles: vendor guess from RingCentral model string, HTTPS URL validation (rejects whitespace/control chars), refresh-from-fleet, list, save. |
 | `src/auth.ts` | HTTP Basic Auth check with constant-time comparison of both user and password. |
@@ -176,6 +176,16 @@ All routes require Basic Auth (user from the `ADMIN_USER` var, password from the
 | `GET /admin/settings` | **Settings.** Kill switch, both allowlists, blocked-IP table. |
 | `POST /admin/settings` | Save. Re-renders with 400 and the submitted text if any allowlist line is invalid or if the admin allowlist would exclude the caller's own IP. |
 | `POST /admin/settings/purge` | Delete request-log rows from IPs outside the provisioning allowlist and reset `blocked_ips`. No-op when the allowlist is empty. |
+
+**Fleet status counts phones only.** The MAC on a request is parsed from the requested filename,
+so any client fetching `/{mac}.cfg` is logged against that MAC. Left unfiltered, an admin
+spot-checking a URL in a browser would flip that device to *seen* and stamp a *Redirected* time,
+quietly corrupting the migration progress view. `listFleet` therefore excludes requests whose
+User-Agent matches a known browser or tool (Mozilla, curl, Wget, python, Go-http, and similar).
+The exclusion is a denylist rather than a phone allowlist on purpose: a real device whose
+User-Agent the parser does not yet recognise still counts as seen, which matters while the exact
+Poly format is unconfirmed. A request with no User-Agent is kept for the same reason. The console
+and the request log are unaffected and still show every request.
 
 ## 7. Security model
 

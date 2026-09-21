@@ -185,6 +185,86 @@ describe('listFleet', () => {
     });
     expect(await listFleet(env.DB)).toEqual([]);
   });
+
+  function seedOne(macAddress: string, name = 'Lab Phone') {
+    return env.DB.exec(
+      buildSeedSql(
+        [{ macAddress, rcDeviceId: '1', name, extension: '2001', model: 'Yealink T48S', rcStatus: 'Online' }],
+        '2026-09-17T00:00:00.000Z',
+      ),
+    );
+  }
+
+  /** A browser or command-line fetch of a config URL: the MAC comes from the path, never from a device. */
+  function toolFetch(
+    macAddress: string,
+    receivedAt: string,
+    userAgent: string | null,
+    responseKind: 'redirect' | 'accepted' = 'redirect',
+  ) {
+    return insertRequestLog(env.DB, {
+      receivedAt,
+      sourceIp: '198.51.100.7',
+      manufacturer: null,
+      model: null,
+      firmware: null,
+      macAddress,
+      httpMethod: 'GET',
+      path: `/${macAddress.replace(/:/g, '').toLowerCase()}.cfg`,
+      queryString: '',
+      userAgent,
+      headersJson: '{}',
+      responseStatus: 200,
+      responseKind,
+      responseReason: null,
+    });
+  }
+
+  it('leaves a device not-seen when only a browser fetched its config URL', async () => {
+    await seedOne('80:5E:C0:00:00:01');
+    await toolFetch(
+      '80:5E:C0:00:00:01',
+      '2026-09-17T01:00:00.000Z',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0',
+    );
+
+    const [row] = await listFleet(env.DB);
+    expect(row).toMatchObject({ status: 'not-seen', checkInCount: 0, lastSeenAt: null });
+  });
+
+  it('excludes a command-line fetch from the check-in count and last seen time', async () => {
+    await seedOne('80:5E:C0:00:00:01');
+    await checkIn('80:5E:C0:00:00:01', '2026-09-17T01:00:00.000Z', '66.86.0.14');
+    await toolFetch('80:5E:C0:00:00:01', '2026-09-17T02:00:00.000Z', 'curl/8.7.1');
+
+    const [row] = await listFleet(env.DB);
+    expect(row).toMatchObject({ status: 'seen', checkInCount: 1, lastSeenAt: '2026-09-17T01:00:00.000Z' });
+  });
+
+  it('does not set last redirect from a config served to a browser', async () => {
+    await seedOne('80:5E:C0:00:00:01');
+    await toolFetch(
+      '80:5E:C0:00:00:01',
+      '2026-09-17T01:00:00.000Z',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15',
+    );
+
+    const [row] = await listFleet(env.DB);
+    expect(row.lastRedirectAt).toBeNull();
+  });
+
+  it('produces no fleet row for an unexpected MAC that only a browser fetched', async () => {
+    await toolFetch('AA:AA:AA:00:00:09', '2026-09-17T01:00:00.000Z', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36');
+    expect(await listFleet(env.DB)).toEqual([]);
+  });
+
+  it('keeps a request with no User-Agent so an unrecognised phone still counts as seen', async () => {
+    await seedOne('80:5E:C0:00:00:01');
+    await toolFetch('80:5E:C0:00:00:01', '2026-09-17T01:00:00.000Z', null);
+
+    const [row] = await listFleet(env.DB);
+    expect(row).toMatchObject({ status: 'seen', checkInCount: 1, lastRedirectAt: '2026-09-17T01:00:00.000Z' });
+  });
 });
 
 import { SETTING, getSetting, isServingEnabled, setSetting } from '../src/db.ts';

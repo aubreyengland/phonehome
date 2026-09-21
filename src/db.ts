@@ -98,6 +98,40 @@ export interface FleetRow {
   lastRedirectAt: string | null;
 }
 
+/**
+ * User-Agent fragments that identify a browser or command-line tool rather than a phone.
+ * The fleet view excludes these so that fetching a `{mac}.cfg` URL by hand never marks a
+ * device as seen or redirected. Everything is still written to the request log.
+ */
+export const NON_PHONE_USER_AGENTS = [
+  'Mozilla',
+  'curl',
+  'Wget',
+  'python',
+  'Go-http',
+  'okhttp',
+  'node-fetch',
+  'axios',
+  'PostmanRuntime',
+  'HTTPie',
+  'Insomnia',
+  'libwww',
+  'Java/',
+] as const;
+
+function sqlStringLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/**
+ * Keeps only requests that could have come from a phone. A missing User-Agent is kept on
+ * purpose: excluding known tools rather than requiring a known phone means a real device
+ * whose header we do not yet parse still shows up in the fleet view.
+ */
+const PHONE_REQUEST_FILTER = `(user_agent IS NULL OR (${NON_PHONE_USER_AGENTS.map(
+  (fragment) => `user_agent NOT LIKE ${sqlStringLiteral(`%${fragment}%`)}`,
+).join(' AND ')}))`;
+
 export async function listFleet(db: D1Database): Promise<FleetRow[]> {
   const result = await db
     .prepare(
@@ -108,14 +142,14 @@ export async function listFleet(db: D1Database): Promise<FleetRow[]> {
                   COUNT(*) OVER (PARTITION BY mac_address) AS check_in_count,
                   ROW_NUMBER() OVER (PARTITION BY mac_address ORDER BY received_at DESC, id DESC) AS rn
            FROM provisioning_requests
-           WHERE mac_address IS NOT NULL
+           WHERE mac_address IS NOT NULL AND ${PHONE_REQUEST_FILTER}
          )
          WHERE rn = 1
        ),
        redirected AS (
          SELECT mac_address, MAX(received_at) AS last_redirect_at
          FROM provisioning_requests
-         WHERE response_kind = 'redirect'
+         WHERE response_kind = 'redirect' AND ${PHONE_REQUEST_FILTER}
          GROUP BY mac_address
        )
        SELECT * FROM (
