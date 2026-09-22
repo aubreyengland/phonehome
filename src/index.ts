@@ -7,6 +7,7 @@ import { parseFleetFilter, renderDashboard } from './pages/dashboard.ts';
 import { renderZoomPage } from './pages/zoom.ts';
 import { renderSettingsPage, type SettingsView } from './pages/settings.ts';
 import { renderProfilesPage } from './pages/profiles.ts';
+import { renderSplashPage } from './pages/splash.ts';
 import { countZoomDevices, syncZoomDevices } from './zoom.ts';
 import { encryptSecret } from './crypto.ts';
 import { isValidZoomUrl, listProfiles, parseVendor, refreshProfiles, saveProfile } from './profiles.ts';
@@ -271,6 +272,25 @@ function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
+const SPLASH_PATHS = new Set(['/', '/index.html']);
+
+/**
+ * The public landing page. Answered before the provisioning IP allowlist on purpose: URL
+ * rating services are never allowlisted, and an unrated domain gets blocked by corporate
+ * web filters. See `pages/splash.ts`. Nothing here is logged, so internet background noise
+ * against `/` stays out of the request log and the blocked-IP counters.
+ */
+function isSplashRequest(method: string, pathname: string): boolean {
+  return SPLASH_PATHS.has(pathname) && (method === 'GET' || method === 'HEAD');
+}
+
+function splashResponse(method: string): Response {
+  return new Response(method === 'HEAD' ? null : renderSplashPage(), {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+  });
+}
+
 /** CSRF defence for state-changing admin POSTs: require same-origin via Sec-Fetch-Site or Origin. */
 function isSameOriginPost(request: Request, url: URL): boolean {
   if (request.headers.get('Sec-Fetch-Site') === 'same-origin') {
@@ -307,6 +327,10 @@ export default {
       return handler
         ? handler(request, env, url)
         : new Response('Not Found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    if (isSplashRequest(request.method, url.pathname)) {
+      return splashResponse(request.method);
     }
 
     return handleProvisioning(request, env, url);

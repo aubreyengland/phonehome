@@ -69,6 +69,25 @@ Gates run in this order:
 | 6 | **Log** the request plus the decision (`response_status`, `response_kind`, `response_reason`). | `db.ts` | Logged to console; the phone's response is unaffected. |
 | 7 | **Respond** with `Cache-Control: no-store`. | — | — |
 
+### 3.0 The root path is answered first
+
+`GET` or `HEAD` on `/` (and `/index.html`) returns the static landing page from
+`pages/splash.ts` with `Cache-Control: public, max-age=3600`, the one deliberate exception to
+the no-store rule. It is answered **before** the IP allowlist and is neither written to the
+request log nor counted in `blocked_ips`.
+
+That ordering is the whole point of the page. A domain with nothing at its root is left
+*Unrated* by URL categorisation services, and corporate web filters block unrated destinations
+outright. That is what stopped the first lab phone: a FortiGate answered the phone's HTTPS
+request with its own block page, so nothing ever reached Cloudflare. Rating crawlers are never
+on the allowlist, so a page behind it could never be rated. Keeping the response unlogged keeps
+internet background noise against `/` out of the request log, which is what the allowlist was
+added to achieve in the first place.
+
+The page carries no script, no form, no redirect and no encoded payload. A login form or an
+obfuscated blob on an unrated domain invites a phishing classification, which is worse than no
+rating at all. Every other path, `{mac}.cfg` included, still goes through the allowlist.
+
 ### 3.2 Decision table (`decideResponse`)
 
 Evaluated top to bottom; first match wins.
@@ -121,6 +140,7 @@ Both generators are pure functions of the Zoom URL and are covered by unit tests
 | `src/ipallow.ts` | IPv4/IPv6/CIDR allowlist parser (one entry per line or comma, `#` comments) and matcher. IPv4-mapped IPv6 is folded to IPv4. Bad lines are reported, good ones kept. |
 | `src/blocked.ts` | `blocked_ips` counters; purge of request-log rows from non-allowlisted IPs. |
 | `src/console.ts` | Debug console page and its JSON feed (`?after=<id>`), 2-second polling, client-side filter/pause. |
+| `src/pages/splash.ts` | The public landing page at `/`. Static, inert, no script or form, no link to `/admin`. |
 | `src/pages/layout.ts` | Shared HTML shell, nav, CSS, `escapeHtml`. |
 | `src/pages/dashboard.ts`, `zoom.ts`, `profiles.ts`, `settings.ts` | Server-rendered admin pages. No framework, no client bundle. |
 | `src/fleet.ts` | Parses the RingCentral `Devices` export (`.xlsx`, read as a zip of XML with `fflate`) into expected-device rows and emits upsert SQL. Used only by `scripts/build-seed.ts`, never at runtime. |
@@ -208,6 +228,8 @@ For the provisioning path:
 - Only `CF-Connecting-IP` is trusted for allowlist decisions. `X-Forwarded-For` is used
   solely as a fallback for the *logged* source IP, never for access control.
 - The server serves at most two file shapes and never echoes request data into a response.
+- `/` is the only path answered to any IP. It is a fixed string of HTML holding no fleet
+  data, device identifiers, or personnel names, and it does not advertise the admin surface.
 
 Data at rest:
 

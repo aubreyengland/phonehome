@@ -455,3 +455,46 @@ describe('IP allowlists', () => {
     expect(await listBlockedIps(env.DB)).toEqual([]);
   });
 });
+
+describe('splash page', () => {
+  const requestCount = async () => (await env.DB.prepare('SELECT COUNT(*) AS n FROM provisioning_requests').first<{ n: number }>())?.n;
+
+  it('serves an HTML page at the root', async () => {
+    const response = await SELF.fetch('https://example.com/');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
+    expect(await response.text()).toContain('Phone Provisioning Service');
+  });
+
+  it('answers a HEAD request at the root', async () => {
+    const response = await SELF.fetch('https://example.com/', { method: 'HEAD' });
+    expect(response.status).toBe(200);
+  });
+
+  // The whole point of the page is to be reachable by rating crawlers, which are never allowlisted.
+  it('serves the root to an IP outside the provisioning allowlist', async () => {
+    await setSetting(env.DB, SETTING.allowedIps, '203.0.113.0/24');
+
+    const response = await SELF.fetch('https://example.com/', { headers: { 'CF-Connecting-IP': '130.12.180.117' } });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('Phone Provisioning Service');
+  });
+
+  it('neither logs the root request nor counts it as a blocked IP', async () => {
+    await setSetting(env.DB, SETTING.allowedIps, '203.0.113.0/24');
+    await SELF.fetch('https://example.com/', { headers: { 'CF-Connecting-IP': '130.12.180.117' } });
+
+    expect(await requestCount()).toBe(0);
+    expect(await listBlockedIps(env.DB)).toEqual([]);
+  });
+
+  it('leaves the allowlist guarding every other path', async () => {
+    await setSetting(env.DB, SETTING.allowedIps, '203.0.113.0/24');
+
+    const config = await SELF.fetch('https://example.com/805ec0aabbcc.cfg', { headers: { 'CF-Connecting-IP': '130.12.180.117' } });
+    expect(config.status).toBe(404);
+    expect(await config.text()).toBe('');
+    expect(await requestCount()).toBe(0);
+    expect(await listBlockedIps(env.DB)).toEqual([expect.objectContaining({ ip: '130.12.180.117', count: 1 })]);
+  });
+});
