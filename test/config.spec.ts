@@ -7,10 +7,20 @@ describe('renderYealinkRedirect', () => {
     expect(renderYealinkRedirect('https://provpp.zoom.us/api/v2/pbx/provisioning/yealink/t48s/')).toBe(
       `#!version:1.0.0.1
 static.auto_provision.server.url = https://provpp.zoom.us/api/v2/pbx/provisioning/yealink/t48s/
+static.auto_provision.server.username =
+static.auto_provision.server.password =
 static.auto_provision.dhcp_option.enable = 0
 static.auto_provision.pnp_enable = 0
 `,
     );
+  });
+
+  // Zoom's assisted provisioning rejects a phone that presents the credentials its previous
+  // provisioning server left behind. Both parameters default to blank, so a blank value clears them.
+  it('clears the provisioning credentials inherited from the previous server', () => {
+    const file = renderYealinkRedirect('https://provyp.zoom.us/api/v2/pbx/provisioning/Yealink/t48s');
+    expect(file).toContain('static.auto_provision.server.username =\n');
+    expect(file).toContain('static.auto_provision.server.password =\n');
   });
 
   it('refuses a URL with a newline (config injection)', () => {

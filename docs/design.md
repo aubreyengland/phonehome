@@ -113,9 +113,18 @@ Evaluated top to bottom; first match wins.
 
 ### 3.3 What the phone receives
 
-**Yealink** (`src/config/yealink.ts`) — a four-line auto-provision file: sets
-`static.auto_provision.server.url` to the Zoom URL and disables DHCP-option and PnP
+**Yealink** (`src/config/yealink.ts`) — a small auto-provision file that sets
+`static.auto_provision.server.url` to the Zoom URL, blanks
+`static.auto_provision.server.username` and `.password`, and disables DHCP-option and PnP
 provisioning so the phone does not come back here on its next boot.
+
+The blank credentials are load-bearing. A RingCentral-provisioned phone still holds RC's
+provisioning credentials and presents them to Zoom, which makes Zoom's assisted provisioning
+refuse the device: the phone fetches our config and then silently fails to register. This was
+confirmed in the lab on 2026-09-24, where clearing those two fields by hand was what finally
+let a phone provision. Zoom's own Yealink procedure instructs a technician to empty both fields;
+these two lines do it for every phone instead. Both parameters default to blank, so a blank
+value resets them.
 
 **Poly** (`src/config/poly.ts`) — two files. `{mac}.cfg` is a master `<APPLICATION>` element
 whose `CONFIG_FILES` names only `{mac}-zoom.cfg`. That file sets `device.prov.serverType`
@@ -367,3 +376,11 @@ npx wrangler deploy
 - The exact Poly VVX User-Agent format on current UCS firmware (the parser is regex-based
   and may need widening once real phones are observed).
 - OBi302 ATAs are classified vendor `other` and are never redirected; they need a separate plan.
+- **Poly almost certainly needs the same credential clearing.** The Yealink failure was stale
+  provisioning credentials inherited from RingCentral. Poly carries equivalent provisioning
+  username and password parameters, and no Poly has yet checked in, so the generator in
+  `config/poly.ts` is untested against a real device. Confirm the parameter names against Poly
+  documentation before adding them rather than guessing.
+- Zoom documents a factory reset as a prerequisite for assisted provisioning. That conflicts with
+  this project's premise. Clearing the credentials was enough for one Yealink without a reset, but
+  it is not yet proven across models or firmware levels.
