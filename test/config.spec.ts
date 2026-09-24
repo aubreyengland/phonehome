@@ -9,7 +9,7 @@ describe('renderYealinkRedirect', () => {
 static.auto_provision.server.url = https://provpp.zoom.us/api/v2/pbx/provisioning/yealink/t48s/
 static.auto_provision.server.username =
 static.auto_provision.server.password =
-static.auto_provision.dhcp_option.enable = 0
+static.auto_provision.dhcp_option.enable = 1
 static.auto_provision.pnp_enable = 0
 `,
     );
